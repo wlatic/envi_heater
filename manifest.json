@@ -1,0 +1,10 @@
+{
+  "domain": "envi_heater",
+  "name": "Envi Smart Heater",
+  "documentation": "https://github.com/wlatic/envi_heater",
+  "requirements": ["requests"],
+  "dependencies": [],
+  "codeowners": ["@wlatic"],
+  "config_flow": true,
+  "version": "0.0.1"
+}
