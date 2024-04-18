@@ -114,8 +114,8 @@ class EnviHeater(ClimateEntity):
                 resp_json = await response.json()
                 if resp_json['status'] == 'success':
                     data = resp_json['data']
-                    self._attr_current_temperature = data['current_temperature']
-                    self._attr_target_temperature = data['current_temperature']  # Assuming the current temperature is the target temperature
+                    self._attr_current_temperature = data['ambient_temperature'] # This is the temp of the room
+                    self._attr_target_temperature = data['current_temperature']  # This is the temp the device will get to
                     self._attr_hvac_mode = HVAC_MODE_HEAT if data['state'] == 1 else HVAC_MODE_OFF
                     self._attr_available = data['status'] == 1
                 else:
