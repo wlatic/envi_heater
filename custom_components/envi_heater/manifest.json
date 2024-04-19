@@ -2,10 +2,11 @@
   "domain": "envi_heater",
   "name": "Envi Smart Heater",
   "documentation": "https://github.com/wlatic/envi_heater",
+  "issue_tracker": "https://github.com/wlatic/envi_heater/issues",
   "requirements": ["requests"],
   "dependencies": [],
   "codeowners": ["@wlatic"],
   "config_flow": true,
-  "version": "0.0.2"
+  "version": "0.0.3"
   "logo": "https://raw.githubusercontent.com/wlatic/envi_heater/main/envi_logo.png"
 }
