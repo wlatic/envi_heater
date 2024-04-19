@@ -8,5 +8,4 @@
   "codeowners": ["@wlatic"],
   "config_flow": true,
   "version": "0.0.3"
-  "logo": "https://raw.githubusercontent.com/wlatic/envi_heater/main/envi_logo.png"
 }
