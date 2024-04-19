@@ -2,4 +2,10 @@
   "name": "Envi Heater",
   "content_in_root": true,
   "render_readme": true
+  "version": "0.0.2",
+  "description": "Envi Heater integration for Home Assistant",
+  "domain": "envi_heater",
+  "type": "integration",
+  "dependencies": ["homeassistant"],
+  "repo": "https://github.com/wlatic/envi_heater"
 }
