@@ -110,8 +110,25 @@ class EnviHeater(ClimateEntity):
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(url, headers=headers) as response:
-                response.raise_for_status()
-                resp_json = await response.json()
+                if response.status == 401:  # Unauthorized
+                    new_token = await self.api.refresh_token()
+                    if new_token:
+                        # Update the token in hass.data
+                        self.hass.data[DOMAIN][self.external_id]['token'] = new_token
+                        self.token = new_token
+                        headers['Authorization'] = f"Bearer {new_token}"
+                        # Retry the request with the new token
+                        async with session.get(url, headers=headers) as response:
+                            response.raise_for_status()
+                            resp_json = await response.json()
+                    else:
+                        _LOGGER.error("Failed to refresh token")
+                        self._attr_available = False
+                        return
+                else:
+                    response.raise_for_status()
+                    resp_json = await response.json()
+
                 if resp_json['status'] == 'success':
                     data = resp_json['data']
                     self._attr_current_temperature = data['ambient_temperature'] # This is the temp of the room
