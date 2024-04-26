@@ -108,7 +108,7 @@ class EnviApiClient:
         except Exception as e:
             _LOGGER.error(f"Failed to turn off device {device_id}: {e}")
 
-     async def refresh_token(self):
+    async def refresh_token(self):
         """Refresh the API token."""
         url = f"{self.base_url}/auth/refresh-token"
         headers = {'Authorization': f'Bearer {self.token}'}
