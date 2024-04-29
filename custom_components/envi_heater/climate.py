@@ -55,14 +55,16 @@ class EnviHeater(ClimateEntity):
     @property
     def supported_features(self):
         """Return the list of supported features."""
-        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE | ClimateEntityFeature.TURN_ON | ClimateEntityFeature.TURN_OFF
+        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
         if hvac_mode == HVACMode.HEAT:
             await self.api_turn_on()
+            self._attr_hvac_mode = HVACMode.HEAT
         elif hvac_mode == HVACMode.OFF:
             await self.api_turn_off()
+            self._attr_hvac_mode = HVACMode.OFF
         else:
             _LOGGER.warning(f"Unsupported HVAC mode: {hvac_mode}")
 
