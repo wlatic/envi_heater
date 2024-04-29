@@ -52,8 +52,8 @@ class EnviHeater(ClimateEntity):
 
     @property
     def supported_features(self):
-    """Return the list of supported features."""
-    return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+        """Return the list of supported features."""
+        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
