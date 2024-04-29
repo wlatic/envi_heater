@@ -38,6 +38,8 @@ class EnviHeater(ClimateEntity):
         self._attr_hvac_mode = HVACMode.OFF  # Starts as OFF
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]  # Supported HVAC modes
         self._attr_temperature_unit = TEMP_FAHRENHEIT  # Set the temperature unit
+        self._attr_target_temperature_high = 86  # Set the maximum target temperature
+        self._attr_target_temperature_low = 50  # Set the minimum target temperature
         self._available = True  # Track availability
 
     @property
