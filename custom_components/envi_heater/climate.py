@@ -1,7 +1,7 @@
 import logging
 from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
-from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode
-from homeassistant.const import ATTR_TEMPERATURE, TEMP_FAHRENHEIT
+from homeassistant.components.climate.const import HVACMode
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -37,7 +37,7 @@ class EnviHeater(ClimateEntity):
         self._target_temperature = None
         self._attr_hvac_mode = HVACMode.OFF  # Starts as OFF
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]  # Supported HVAC modes
-        self._attr_temperature_unit = TEMP_FAHRENHEIT  # Set the temperature unit
+        self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT  # Set the temperature unit
         self._attr_target_temperature_high = 86  # Set the maximum target temperature
         self._attr_target_temperature_low = 50  # Set the minimum target temperature
         self._available = True  # Track availability
@@ -55,7 +55,7 @@ class EnviHeater(ClimateEntity):
     @property
     def supported_features(self):
         """Return the list of supported features."""
-        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE | ClimateEntityFeature.PRESET_MODE
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
