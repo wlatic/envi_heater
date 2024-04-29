@@ -1,6 +1,6 @@
 import logging
 from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
-from homeassistant.components.climate.const import HVAC_MODE_HEAT, HVAC_MODE_OFF
+from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode
 from homeassistant.const import ATTR_TEMPERATURE, TEMP_FAHRENHEIT
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -35,8 +35,8 @@ class EnviHeater(ClimateEntity):
         self.external_id = external_id
         self._current_temperature = None
         self._target_temperature = None
-        self._attr_hvac_mode = HVAC_MODE_OFF  # Starts as OFF
-        self._attr_hvac_modes = [HVAC_MODE_OFF, HVAC_MODE_HEAT]  # Supported HVAC modes
+        self._attr_hvac_mode = HVACMode.OFF  # Starts as OFF
+        self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]  # Supported HVAC modes
         self._attr_temperature_unit = TEMP_FAHRENHEIT  # Set the temperature unit
         self._available = True  # Track availability
 
@@ -52,15 +52,14 @@ class EnviHeater(ClimateEntity):
 
     @property
     def supported_features(self):
-        """Return the list of supported features."""
-        return ClimateEntityFeature.TARGET_TEMPERATURE
-    
+    """Return the list of supported features."""
+    return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
-        if hvac_mode == HVAC_MODE_HEAT:
+        if hvac_mode == HVACMode.HEAT:
             await self.api_turn_on()
-        elif hvac_mode == HVAC_MODE_OFF:
+        elif hvac_mode == HVACMode.OFF:
             await self.api_turn_off()
         else:
             _LOGGER.warning(f"Unsupported HVAC mode: {hvac_mode}")
@@ -71,7 +70,7 @@ class EnviHeater(ClimateEntity):
         payload = {'state': 1}
         async with self.hass.helpers.aiohttp_client.async_get_clientsession().patch(url, headers=headers, json=payload) as response:
             response.raise_for_status()
-        self._attr_hvac_mode = HVAC_MODE_HEAT
+        self._attr_hvac_mode = HVACMode.HEAT
 
     async def api_turn_off(self):
         url = f"https://app-apis.enviliving.com/apis/v1/device/update-temperature/{self.external_id}"
@@ -79,7 +78,7 @@ class EnviHeater(ClimateEntity):
         payload = {'state': 0}
         async with self.hass.helpers.aiohttp_client.async_get_clientsession().patch(url, headers=headers, json=payload) as response:
             response.raise_for_status()
-        self._attr_hvac_mode = HVAC_MODE_OFF
+        self._attr_hvac_mode = HVACMode.OFF
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
@@ -133,7 +132,7 @@ class EnviHeater(ClimateEntity):
                     data = resp_json['data']
                     self._attr_current_temperature = data['ambient_temperature'] # This is the temp of the room
                     self._attr_target_temperature = data['current_temperature']  # This is the temp the device will get to
-                    self._attr_hvac_mode = HVAC_MODE_HEAT if data['state'] == 1 else HVAC_MODE_OFF
+                    self._attr_hvac_mode = HVACMode.HEAT if data['state'] == 1 else HVACMode.OFF
                     self._attr_available = data['status'] == 1
                 else:
                     _LOGGER.error(f"Failed to retrieve current state: {resp_json}")
