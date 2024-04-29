@@ -41,6 +41,7 @@ class EnviHeater(ClimateEntity):
         self._attr_target_temperature_high = 86  # Set the maximum target temperature
         self._attr_target_temperature_low = 50  # Set the minimum target temperature
         self._available = True  # Track availability
+        self._enable_turn_on_off_backwards_compatibility = False
 
     @property
     def name(self):
@@ -55,8 +56,11 @@ class EnviHeater(ClimateEntity):
     @property
     def supported_features(self):
         """Return the list of supported features."""
-        return ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
-
+        return (ClimateEntityFeature.TARGET_TEMPERATURE |
+                ClimateEntityFeature.TARGET_TEMPERATURE_RANGE |
+                ClimateEntityFeature.TURN_ON |
+                ClimateEntityFeature.TURN_OFF)
+    
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
         if hvac_mode == HVACMode.HEAT:
