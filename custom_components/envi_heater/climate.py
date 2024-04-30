@@ -21,15 +21,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             api = device_info['api']
             token = device_info['token']
             external_id = device_info['external_id']
-            devices.append(EnviHeater(hass, api, token, external_id))
+            devices.append(EnviHeater(hass, entry, api, token, external_id))
 
     async_add_entities(devices)
 
 class EnviHeater(ClimateEntity):
     """Representation of an Envi Heater."""
-    def __init__(self, hass, api, token, external_id):
+    def __init__(self, hass, entry, api, token, external_id):
         """Initialize the Envi Heater."""
         self.hass = hass
+        self.entry = entry
         self.api = api
         self.token = token
         self.external_id = external_id
@@ -40,7 +41,7 @@ class EnviHeater(ClimateEntity):
         self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT  # Set the temperature unit
         self._attr_target_temperature_high = 86  # Set the maximum target temperature
         self._attr_target_temperature_low = 50  # Set the minimum target temperature
-        self._available = True  # Track availability
+        self._attr_available = True  # Track availability
         self._enable_turn_on_off_backwards_compatibility = False
 
     @property
@@ -61,6 +62,46 @@ class EnviHeater(ClimateEntity):
                 ClimateEntityFeature.TURN_ON |
                 ClimateEntityFeature.TURN_OFF)
     
+    @property
+    def current_temperature(self):
+        """Return the current temperature."""
+        return self._current_temperature
+
+    @property
+    def target_temperature(self):
+        """Return the target temperature."""
+        return self._target_temperature
+
+    @property
+    def hvac_mode(self):
+        """Return the current HVAC mode."""
+        return self._attr_hvac_mode
+
+    @property
+    def hvac_modes(self):
+        """Return the list of available HVAC modes."""
+        return self._attr_hvac_modes
+
+    @property
+    def temperature_unit(self):
+        """Return the unit of measurement."""
+        return self._attr_temperature_unit
+
+    @property
+    def target_temperature_high(self):
+        """Return the maximum target temperature."""
+        return self._attr_target_temperature_high
+
+    @property
+    def target_temperature_low(self):
+        """Return the minimum target temperature."""
+        return self._attr_target_temperature_low
+
+    @property
+    def available(self):
+        """Return True if entity is available."""
+        return self._attr_available
+
     async def async_set_hvac_mode(self, hvac_mode):
         """Set new target hvac mode."""
         if hvac_mode == HVACMode.HEAT:
@@ -104,7 +145,7 @@ class EnviHeater(ClimateEntity):
         payload = {'temperature': temperature}
         async with self.hass.helpers.aiohttp_client.async_get_clientsession().patch(url, headers=headers, json=payload) as response:
             response.raise_for_status()
-        self._attr_target_temperature = temperature
+        self._target_temperature = temperature
 
     async def async_update(self):
         """Fetch new state data for the heater."""
@@ -121,16 +162,12 @@ class EnviHeater(ClimateEntity):
                     new_token = await self.api.authenticate()
                     if new_token:
                         # Update the token in hass.data
-                        self.hass.data[DOMAIN][self.external_id]['token'] = new_token
+                        self.hass.data[DOMAIN][self.entry.entry_id]['token'] = new_token
                         self.token = new_token
                         headers['Authorization'] = f"Bearer {new_token}"
 
                         # Update the config entry with the new token
-                        config_entries = self.hass.config_entries
-                        for entry in config_entries.async_entries(DOMAIN):
-                            if entry.data['external_id'] == self.external_id:
-                                self.hass.config_entries.async_update_entry(entry, data={**entry.data, 'token': new_token})
-                                break
+                        self.hass.config_entries.async_update_entry(self.entry, data={**self.entry.data, 'token': new_token})
 
                         # Retry the request with the new token
                         async with session.get(url, headers=headers) as response:
@@ -146,8 +183,8 @@ class EnviHeater(ClimateEntity):
 
                 if resp_json['status'] == 'success':
                     data = resp_json['data']
-                    self._attr_current_temperature = data['ambient_temperature'] # This is the temp of the room
-                    self._attr_target_temperature = data['current_temperature']  # This is the temp the device will get to
+                    self._current_temperature = data['ambient_temperature'] # This is the temp of the room
+                    self._target_temperature = data['current_temperature']  # This is the temp the device will get to
                     self._attr_hvac_mode = HVACMode.HEAT if data['state'] == 1 else HVACMode.OFF
                     self._attr_available = data['status'] == 1
                 else:
@@ -156,8 +193,3 @@ class EnviHeater(ClimateEntity):
         except Exception as e:
             _LOGGER.error(f"An unexpected error occurred while fetching the state: {e}")
             self._attr_available = False
-
-    @property
-    def available(self):
-        """Return True if entity is available."""
-        return self._attr_available
