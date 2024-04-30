@@ -117,13 +117,21 @@ class EnviHeater(ClimateEntity):
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(url, headers=headers) as response:
-                if response.status in (401, 403):  # Unauthorized or invlaid
+                if response.status in (401, 403):  # Unauthorized or invalid
                     new_token = await self.api.authenticate()
                     if new_token:
                         # Update the token in hass.data
                         self.hass.data[DOMAIN][self.external_id]['token'] = new_token
                         self.token = new_token
                         headers['Authorization'] = f"Bearer {new_token}"
+
+                        # Update the config entry with the new token
+                        config_entries = self.hass.config_entries
+                        for entry in config_entries.async_entries(DOMAIN):
+                            if entry.data['external_id'] == self.external_id:
+                                self.hass.config_entries.async_update_entry(entry, data={**entry.data, 'token': new_token})
+                                break
+
                         # Retry the request with the new token
                         async with session.get(url, headers=headers) as response:
                             response.raise_for_status()
