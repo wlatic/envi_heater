@@ -3,10 +3,12 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import Platform
 
 from .api import EnviApiClient
-from .const import DOMAIN
+from .const import DOMAIN, CONF_DEVICE_ID
+from .climate import EnviHeater
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,7 +17,11 @@ async def async_setup(hass: HomeAssistant, config: dict):
     _LOGGER.info("Initializing Envi Heater component")
     return True
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback
+):
     """Set up Envi Heater from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     
