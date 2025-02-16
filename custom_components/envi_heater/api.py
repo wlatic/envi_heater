@@ -1,5 +1,6 @@
 import aiohttp
 import logging
+from datetime import datetime, timedelta
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -107,9 +108,8 @@ class EnviApiClient:
                 response.raise_for_status()
         except Exception as e:
             _LOGGER.error(f"Failed to turn off device {device_id}: {e}")
-    #Sample not used currently below
-    async def refresh_token(self):
-        """Refresh the API token."""
+    async def _refresh_token(self):
+        """Refresh the access token."""
         url = f"{self.base_url}/auth/refresh-token"
         headers = {'Authorization': f'Bearer {self.token}'}
         try:
@@ -117,7 +117,8 @@ class EnviApiClient:
                 response.raise_for_status()
                 data = await response.json()
                 self.token = data.get('data', {}).get('token')
-                return self.token
+                self.token_expiry = datetime.now() + timedelta(minutes=55)
+                return True
         except Exception as e:
             _LOGGER.error(f"Failed to refresh token: {e}")
-            return None
+            return False
