@@ -20,7 +20,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback
+    async_add_entities: AddEntitiesCallback  # Add this parameter
 ):
     """Set up Envi Heater from a config entry."""
     hass.data.setdefault(DOMAIN, {})

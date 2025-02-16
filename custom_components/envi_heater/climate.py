@@ -10,20 +10,6 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    """Set up Envi Heater climate entities from a config entry."""
-    devices = []
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-
-    # Ensure only dictionaries meant for devices are processed
-    for device_id, device_info in entry_data.items():
-        if isinstance(device_info, dict) and all(k in device_info for k in ['api', 'token', 'external_id']):
-            api = device_info['api']
-            token = device_info['token']
-            external_id = device_info['external_id']
-            devices.append(EnviHeater(hass, entry, api, token, external_id))
-
-    async_add_entities(devices)
 
 class EnviHeater(ClimateEntity):
     """Representation of an Envi Heater."""
