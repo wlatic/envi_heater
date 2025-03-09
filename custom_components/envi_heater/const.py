@@ -1,5 +1,2 @@
 DOMAIN = "envi_heater"
 OPTIONS_KEY = "envi_heater_options"
-CONF_DEVICE_ID = "device_id"
-TOKEN_EXPIRY = "token_expiry"
-REFRESH_TOKEN = "refresh_token"
