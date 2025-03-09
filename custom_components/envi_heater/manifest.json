@@ -3,9 +3,9 @@
   "name": "Envi Smart Heater",
   "documentation": "https://github.com/wlatic/envi_heater",
   "issue_tracker": "https://github.com/wlatic/envi_heater/issues",
-  "requirements": ["aiohttp"],
+  "requirements": ["aiohttp>=3.8.4"],
   "dependencies": [],
   "codeowners": ["@wlatic"],
   "config_flow": true,
-  "version": "0.10.0NoneAI"
+  "version": "0.10.0"
 }
