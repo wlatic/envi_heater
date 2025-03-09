@@ -7,10 +7,11 @@ _LOGGER = logging.getLogger(__name__)
 class EnviApiClient:
     """Client to interact with the Envi Smart Heater API."""
 
-    def __init__(self, session, username, password):
+    def __init__(self, session, username, password, device_id):
         self.session = session
         self.username = username
         self.password = password
+        self.device_id = device_id  # Add this line
         self.base_url = 'https://app-apis.enviliving.com/apis/v1'
         self.token = None  # Initialize token attribute
 
@@ -21,7 +22,7 @@ class EnviApiClient:
             "username": self.username,
             "password": self.password,
             "login_type": 1,
-            "device_id": "your_device_id",  # Ensure you handle the device ID appropriately
+            "device_id": self.device_id,  # Use self.device_id
             "device_type": "homeassistant"
         }
         try:
