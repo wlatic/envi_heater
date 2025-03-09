@@ -31,7 +31,7 @@ async def async_setup_entry(
         session,
         entry.data['username'],
         entry.data['password'],
-        entry.data[CONF_DEVICE_ID]  # Use stored device ID
+        entry.data[CONF_DEVICE_ID]  # Now correctly passed
     )
     
     # Store API client with device-specific data
