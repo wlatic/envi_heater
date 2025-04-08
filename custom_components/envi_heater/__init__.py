@@ -46,10 +46,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Store client in hass.data (single client per config entry)
     hass.data[DOMAIN][entry.entry_id] = client
 
-    # Forward to climate platform
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "climate")
-    )
+    # Forward to climate platform using new method
+    await hass.config_entries.async_forward_entry_setups(entry, ["climate"])
 
     return True
 
