@@ -48,7 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # Forward to climate platform
     hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "climate")
+        hass.config_entries.async_forward_entry_setups(entry, ["climate"])
     )
 
     return True
