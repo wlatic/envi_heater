@@ -5,6 +5,7 @@ import logging
 
 from .api import EnviApiClient
 from .const import DOMAIN
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,9 +48,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN][entry.entry_id] = client
 
     # Forward to climate platform
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setups(entry, ["climate"])
-    )
+    await hass.config_entries.async_forward_entry_setups(entry, ["climate"])
+
+    # Set up custom services
+    await async_setup_services(hass)
 
     return True
 
@@ -60,4 +62,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     
     # Unload climate platform
     await hass.config_entries.async_forward_entry_unload(entry, "climate")
+    
     return True
