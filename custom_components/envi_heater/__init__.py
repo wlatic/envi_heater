@@ -6,38 +6,25 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EnviApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CLIMATE]
+PLATFORMS: list[Platform] = [Platform.CLIMATE]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Envi Heater from a config entry."""
     client = EnviApiClient(
-        hass.helpers.aiohttp_client.async_get_clientsession(),
-        entry.data["username"],
-        entry.data["password"],
+        session=async_get_clientsession(hass),   # ← correct way
+        username=entry.data["username"],
+        password=entry.data["password"],
     )
 
-    # Try to login
-    try:
-        await client.authenticate()
-    except Exception as err:
-        _LOGGER.error("Envi authentication failed: %s", err)
-        raise ConfigEntryAuthFailed("Authentication failed") from err
-
-    # Try to fetch devices – if this fails it’s usually network or API change
-    try:
-        device_ids = await client.fetch_all_device_ids()
-        if not device_ids:
-            _LOGGER.warning("Login succeeded but no devices found – possible account issue")
-    except Exception as err:
-        _LOGGER.error("Failed to fetch devices after successful login: %s", err)
-        raise ConfigEntryNotReady("Could not fetch devices") from err
+    # Login was already verified in config_flow, but do it again to be safe
+    await client.authenticate()
 
     hass.data.setdefault("envi_heater", {})[entry.entry_id] = client
 
