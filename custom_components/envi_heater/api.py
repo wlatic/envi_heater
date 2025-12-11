@@ -3,6 +3,7 @@ import asyncio
 import base64
 import json
 import logging
+import uuid
 from aiohttp import ClientTimeout
 from datetime import datetime, timedelta, timezone
 
@@ -38,7 +39,7 @@ class EnviApiClient:
             "username": self.username,
             "password": self.password,
             "login_type": 1,
-            "device_id": f"ha_{__{__import__('uuid').getnode():x}",
+            "device_id": f"ha_{uuid.getnode():x}",
             "device_type": "homeassistant",
         }
 
