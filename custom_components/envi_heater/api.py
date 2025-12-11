@@ -101,7 +101,7 @@ class EnviApiClient:
 
     async def _request(self, method: str, endpoint: str, **kwargs) -> dict:
         """Internal request with automatic token refresh."""
-        if not self.token is None:
+        if self.token is None:
             await self.authenticate()
 
         # Refresh token if within 5 minutes of expiry
