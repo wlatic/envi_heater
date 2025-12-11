@@ -1,44 +1,47 @@
 import aiohttp
 import asyncio
-import logging
 import base64
 import json
+import logging
 from aiohttp import ClientTimeout
 from datetime import datetime, timedelta, timezone
 
-
 _LOGGER = logging.getLogger(__name__)
+
 
 class EnviApiError(Exception):
     """Base exception for Envi API errors."""
     pass
 
+
 class EnviAuthenticationError(EnviApiError):
     """Authentication failed."""
     pass
+
 
 class EnviDeviceError(EnviApiError):
     """Device operation failed."""
     pass
 
+
 class EnviApiClient:
     """Central API client with token management for all devices."""
-    
-    def __init__(self, session, username, password):
+
+    def __init__(self, session: aiohttp.ClientSession, username: str, password: str):
         self.session = session
         self.username = username
         self.password = password
-        self.base_url = 'https://app-apis.enviliving.com/apis/v1'
-        self.token = None
-        self.token_expires = None
-        self._refresh_lock = asyncio.Lock()  # Prevents concurrent token refreshes
-        self.timeout = ClientTimeout(total=15)  # 15-second timeout
+        self.base_url = "https://app-apis.enviliving.com/apis/v1"
+        self.token: str | None = None
+        self.token_expires: datetime | None = None
+        self._refresh_lock = asyncio.Lock()
+        self.timeout = ClientTimeout(total=15)
 
-        async def authenticate(self) -> None:
+    async def authenticate(self) -> None:
         """Authenticate and get access token."""
         payload = {
-            "username": self._username,
-            "password": self._password,
+            "username": self.username,
+            "password": self.password,
             "login_type": 1,
             "device_id": "homeassistant_integration",
             "device_type": "homeassistant",
@@ -48,11 +51,13 @@ class EnviApiClient:
             response_data = await self._request("post", "auth/login", json=payload)
             self.token = response_data["data"]["token"]
 
-            # Start with whatever the API tells us (often missing or wrong)
+            # Use expires_in if present (it’s usually missing or wrong)
             expires_in = response_data["data"].get("expires_in")
-            self.token_expires = datetime.now(timezone.utc) + timedelta(seconds=expires_in or 3600)
+            self.token_expires = datetime.now(timezone.utc) + timedelta(
+                seconds=expires_in or 3600
+            )
 
-            # THIS IS THE FIX — parse real expiry from the JWT (like the working Hubitat version)
+            # THIS IS THE FIX – parse real expiry from JWT (exactly like the working Hubitat version)
             jwt_expiry = self._parse_jwt_expiry(self.token)
             if jwt_expiry and jwt_expiry > self.token_expires:
                 _LOGGER.info(
@@ -65,8 +70,9 @@ class EnviApiClient:
             _LOGGER.debug("Authentication successful")
         except Exception as err:
             raise EnviAuthenticationError(f"Authentication failed: {err}") from err
+
     def _parse_jwt_expiry(self, token: str) -> datetime | None:
-        """Extract the real 'exp' claim from the Envi JWT token — exactly like the working Hubitat integration."""
+        """Extract the real 'exp' claim from the Envi JWT token."""
         try:
             payload_b64 = token.split(".")[1]
             payload_b64 += "=" * (-len(payload_b64) % 4)  # fix padding
@@ -76,22 +82,23 @@ class EnviApiClient:
             if exp:
                 return datetime.fromtimestamp(exp, tz=timezone.utc)
         except Exception as exc:
-            _LOGGER.debug("Could not parse JWT expiry (%s) — falling back to expires_in value", exc)
+            _LOGGER.debug("Could not parse JWT expiry (%s) — using expires_in value", exc)
         return None
-        
-    async def _is_token_valid(self):
-        """Check if current token is still valid."""
+
+    async def _is_token_valid(self) -> bool:
+        """Check if current token is still valid (with 5-minute safety buffer)."""
         if not self.token or not self.token_expires:
-            _LOGGER.debug("No token or expiration time available")
             return False
-        
-        # Add 5-minute buffer before expiration to prevent edge cases
+
         buffer_time = timedelta(minutes=5)
-        is_valid = datetime.now() < (self.token_expires - buffer_time)
-        
+        is_valid = datetime.now(timezone.utc) < (self.token_expires - buffer_time)
+
         if not is_valid:
-            _LOGGER.debug(f"Token expired or will expire soon. Current time: {datetime.now()}, Token expires: {self.token_expires}")
-        
+            _LOGGER.debug(
+                "Token expired or expiring soon — Current: %s, Expires: %s",
+                datetime.now(timezone.utc),
+                self.token_expires,
+            )
         return is_valid
 
     async def _request(self, method, endpoint, **kwargs):
