@@ -101,67 +101,43 @@ class EnviApiClient:
             )
         return is_valid
 
-    async def _request(self, method, endpoint, **kwargs):
-        """Central API request handler with retries and token refresh."""
-        url = f"{self.base_url}/{endpoint}"
-        
-        for attempt in range(3):  # 3 retries max
-            try:
-                # Check if token needs refresh before request
-                if not await self._is_token_valid():
-                    async with self._refresh_lock:
-                        if not await self._is_token_valid():  # Double-check after acquiring lock
-                            _LOGGER.debug("Token expired, refreshing...")
-                            await self.authenticate()
-                
-                # Auto-inject token if available
-                headers = kwargs.get('headers', {})
-                if self.token:
-                    headers['Authorization'] = f'Bearer {self.token}'
-                    _LOGGER.debug(f"Making {method} request to {endpoint} with token")
-                else:
-                    _LOGGER.warning(f"Making {method} request to {endpoint} without token")
-                
-                async with self.session.request(
-                    method,
-                    url,
-                    headers=headers,
-                    timeout=self.timeout,
-                    **kwargs
-                ) as resp:
-                    # Token expired - refresh and retry
-                    if resp.status in (401, 403) and attempt < 2:
-                        async with self._refresh_lock:
-                            _LOGGER.warning(f"Token invalid (status {resp.status}), refreshing and retrying...")
-                            await self.authenticate()
-                            continue
-                            
-                    if resp.status >= 400:
-                        error_text = await resp.text()
-                        _LOGGER.error(f"API error {resp.status}: {error_text}")
-                        if resp.status == 401:
-                            raise EnviAuthenticationError("Authentication failed")
-                        elif resp.status == 403:
-                            raise EnviAuthenticationError("Unauthorized - token may be invalid")
-                        elif resp.status >= 500:
-                            raise EnviApiError(f"Server error: {resp.status}")
-                        else:
-                            raise EnviApiError(f"API error: {resp.status}")
-                            
-                    resp.raise_for_status()
-                    return await resp.json()
-                    
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                if attempt < 2:  # Only log error on final attempt
-                    _LOGGER.debug(f"Retrying {method} {endpoint} (attempt {attempt + 1}) due to: {e}")
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                else:
-                    _LOGGER.error(f"API request failed after 3 attempts: {e}")
-                    raise EnviApiError(f"Request failed: {e}")
-            except EnviAuthenticationError:
-                # Don't retry authentication errors
-                raise
+     async def _request(self, method: str, endpoint: str, **kwargs) -> dict:
+        """Perform API request with automatic token refresh on 401/403."""
+        # If we have no token at all, authenticate first (but without holding the lock yet)
+        if not self.token:
+            await self.authenticate()
 
+        headers = kwargs.setdefault("headers", {})
+        headers["Authorization"] = f"Bearer {self.token}"
+        headers.setdefault("Accept", "application/json")
+
+        url = f"{self.base_url}/{endpoint}"
+
+        # Only use the lock for the actual HTTP request + possible single retry
+        async with self._refresh_lock:
+            try:
+                async with self.session.request(
+                    method.upper(), url, timeout=self.timeout, **kwargs
+                ) as response:
+                    if response.status in (401, 403):
+                        # Token expired or invalid → refresh once and retry
+                        _LOGGER.debug("Token invalid (%s), refreshing...", response.status)
+                        await self.authenticate()
+
+                        # Update header with new token and retry exactly once
+                        headers["Authorization"] = f"Bearer {self.token}"
+                        async with self.session.request(
+                            method.upper(), url, timeout=self.timeout, headers=headers, **kwargs
+                        ) as retry_response:
+                            retry_response.raise_for_status()
+                            return await retry_response.json()
+
+                    response.raise_for_status()
+                    return await response.json()
+
+            except Exception as err:
+                _LOGGER.error(f"API request failed ({method} {endpoint}): {err}")
+                raise EnviDeviceError(f"API request failed: {err}") from err
     # Enhanced device methods with better error handling
     async def fetch_all_device_ids(self):
         """Get all device IDs from API."""
