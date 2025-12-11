@@ -38,7 +38,7 @@ class EnviApiClient:
             "username": self.username,
             "password": self.password,
             "login_type": 1,
-            "device_id": "homeassistant_integration",
+            "device_id": f"ha_{__{__import__('uuid').getnode():x}",
             "device_type": "homeassistant",
         }
 
