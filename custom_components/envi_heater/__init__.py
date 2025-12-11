@@ -1,66 +1,50 @@
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+"""Envi Heater integration."""
+from __future__ import annotations
+
 import logging
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+
 from .api import EnviApiClient
-from .const import DOMAIN
-from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup(hass: HomeAssistant, config: dict):
-    """Set up the Envi Heater component."""
-    return True  # No setup needed for YAML config
+PLATFORMS = [Platform.CLIMATE]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Envi Heater from a config entry."""
-    hass.data.setdefault(DOMAIN, {})
-
-    # Initialize shared API client
-    session = async_get_clientsession(hass)
     client = EnviApiClient(
-        session=session,
-        username=entry.data["username"],
-        password=entry.data["password"]
+        hass.helpers.aiohttp_client.async_get_clientsession(),
+        entry.data["username"],
+        entry.data["password"],
     )
 
-    # Authenticate and validate connection
+    # Try to login
     try:
-        if not await client.authenticate():
-            _LOGGER.error("Failed to authenticate with Envi API")
-            return False
-    except Exception as e:
-        _LOGGER.error(f"Authentication error: {e}")
-        return False
+        await client.authenticate()
+    except Exception as err:
+        _LOGGER.error("Envi authentication failed: %s", err)
+        raise ConfigEntryAuthFailed("Authentication failed") from err
 
-    # Verify we can get device IDs
+    # Try to fetch devices – if this fails it’s usually network or API change
     try:
         device_ids = await client.fetch_all_device_ids()
         if not device_ids:
-            _LOGGER.error("No Envi devices found in account")
-            return False
-    except Exception as e:
-        _LOGGER.error(f"Device ID fetch failed: {e}")
-        return False
+            _LOGGER.warning("Login succeeded but no devices found – possible account issue")
+    except Exception as err:
+        _LOGGER.error("Failed to fetch devices after successful login: %s", err)
+        raise ConfigEntryNotReady("Could not fetch devices") from err
 
-    # Store client in hass.data (single client per config entry)
-    hass.data[DOMAIN][entry.entry_id] = client
+    hass.data.setdefault("envi_heater", {})[entry.entry_id] = client
 
-    # Forward to climate platform
-    await hass.config_entries.async_forward_entry_setups(entry, ["climate"])
-
-    # Set up custom services
-    await async_setup_services(hass)
-
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Clear client from memory
-    hass.data[DOMAIN].pop(entry.entry_id)
-    
-    # Unload climate platform
-    await hass.config_entries.async_forward_entry_unload(entry, "climate")
-    
-    return True
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
