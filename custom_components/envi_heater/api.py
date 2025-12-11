@@ -26,6 +26,11 @@ class EnviDeviceError(EnviApiError):
     pass
 
 
+class EnviDeviceError(EnviApiError):
+    """Raised when device operations fail."""
+    pass
+
+
 class EnviApiClient:
     def __init__(self, session: aiohttp.ClientSession, username: str, password: str):
         self.session = session
@@ -61,7 +66,12 @@ class EnviApiClient:
         _LOGGER.debug("Login payload: %s", payload)
 
         try:
-            async with self.session.post(url, json=payload, headers=headers, timeout=self.timeout) as resp:
+            async with self.session.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=self.timeout,
+            ) as resp:
                 resp_text = await resp.text()
 
                 _LOGGER.debug("Envi login response: %s – %s", resp.status, resp_text[:1000])
@@ -71,15 +81,23 @@ class EnviApiClient:
 
                 data = json.loads(resp_text)
                 if data.get("status") != "success":
-                    raise EnviAuthenticationError(f"Envi rejected login: {data.get('msg', 'unknown')}")
+                    raise EnviAuthenticationError(
+                        f"Envi rejected login: {data.get('msg', 'unknown')}"
+                    )
 
                 self.token = data["data"]["token"]
                 jwt_exp = self._parse_jwt_expiry(self.token)
-                self.token_expires = jwt_exp or (datetime.now(timezone.utc) + timedelta(days=365))
+                # Fallback: assume 1 year validity if parsing fails
+                self.token_expires = jwt_exp or (
+                    datetime.now(timezone.utc) + timedelta(days=365)
+                )
 
-                _LOGGER.info("Envi login successful – token valid until %s", self.token_expires.strftime("%Y-%m-%d %H:%M"))
+                _LOGGER.info(
+                    "Envi login successful – token valid until %s",
+                    self.token_expires.strftime("%Y-%m-%d %H:%M"),
+                )
 
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001
             _LOGGER.error("Envi authentication failed", exc_info=True)
             raise EnviAuthenticationError("Authentication failed") from err
 
@@ -87,13 +105,16 @@ class EnviApiClient:
         """Extract real expiry from JWT (valid ~1 year)."""
         try:
             payload_part = token.split(".")[1]
+            # Add padding
             payload_part += "=" * (-len(payload_part) % 4)
             claims = json.loads(base64.urlsafe_b64decode(payload_part))
-            if exp = claims.get("exp")
-            if exp:
-                return datetime.fromtimestamp(exp, tz=timezone.utc)
-        except Exception as e:
+
+            exp = claims.get("exp")
+            if exp is not None:
+                return datetime.fromtimestamp(int(exp), tz=timezone.utc)
+        except Exception as e:  # noqa: BLE001
             _LOGGER.debug("Failed to parse JWT expiry: %s", e)
+
         return None
 
     async def _request(self, method: str, endpoint: str, **kwargs) -> dict:
@@ -104,19 +125,26 @@ class EnviApiClient:
         # Refresh if within 5 minutes of expiry
         if self.token_expires and datetime.now(timezone.utc) >= self.token_expires - timedelta(minutes=5):
             async with self._refresh_lock:
-                if datetime.now(timezone.utc) >= self.token_expires - timedelta(minutes=5):
+                if self.token_expires and datetime.now(timezone.utc) >= self.token_expires - timedelta(minutes=5):
                     await self.authenticate()
 
-        headers = kwargs.pop("headers", {})
-        headers.update({
-            "Authorization": f"Bearer {self.token}",
-            "Accept": "application/json",
-        })
+        headers = kwargs.pop("headers", {}) or {}
+        headers.update(
+            {
+                "Authorization": f"Bearer {self.token}",
+                "Accept": "application/json",
+            }
+        )
         kwargs["headers"] = headers
 
         url = f"{self.base_url}/{endpoint}"
 
-        async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as resp:
+        async with self.session.request(
+            method.upper(),
+            url,
+            timeout=self.timeout,
+            **kwargs,
+        ) as resp:
             if resp.status in (401, 403):
                 _LOGGER.debug("Token expired/invalid – refreshing and retrying")
                 async with self._refresh_lock:
@@ -124,7 +152,12 @@ class EnviApiClient:
                     headers["Authorization"] = f"Bearer {self.token}"
                     kwargs["headers"] = headers
 
-                async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as retry:
+                async with self.session.request(
+                    method.upper(),
+                    url,
+                    timeout=self.timeout,
+                    **kwargs,
+                ) as retry:
                     retry.raise_for_status()
                     return await retry.json()
 
@@ -141,11 +174,15 @@ class EnviApiClient:
         return data.get("data", {})
 
     async def update_device(self, device_id: str, payload: dict):
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json=payload)
+        return await self._request(
+            "PATCH",
+            f"device/update-temperature/{device_id}",
+            json=payload,
+        )
 
     async def test_connection(self) -> bool:
         try:
             await self.fetch_all_device_ids()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
