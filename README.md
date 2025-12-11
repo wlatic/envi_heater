@@ -165,6 +165,7 @@ This integration is designed to be robust and user-friendly. If you encounter is
 - Improved error handling
 - Better device integration
 - Production-ready logging
+- JWT auth added
 
 ### v0.10.0
 - Initial release
