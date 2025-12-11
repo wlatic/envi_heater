@@ -1,8 +1,11 @@
 import aiohttp
 import asyncio
 import logging
+import base64
+import json
 from aiohttp import ClientTimeout
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,48 +34,51 @@ class EnviApiClient:
         self._refresh_lock = asyncio.Lock()  # Prevents concurrent token refreshes
         self.timeout = ClientTimeout(total=15)  # 15-second timeout
 
-    async def authenticate(self):
-        """Authenticate and get a fresh token."""
-        url = f"{self.base_url}/auth/login"
+        async def authenticate(self) -> None:
+        """Authenticate and get access token."""
         payload = {
-            "username": self.username,
-            "password": self.password,
+            "username": self._username,
+            "password": self._password,
             "login_type": 1,
             "device_id": "homeassistant_integration",
-            "device_type": "homeassistant"
+            "device_type": "homeassistant",
         }
-        
-        try:
-            _LOGGER.debug("Attempting authentication with Envi API")
-            async with self.session.post(url, json=payload, timeout=self.timeout) as resp:
-                if resp.status == 401:
-                    _LOGGER.error("Authentication failed: Invalid credentials")
-                    raise EnviAuthenticationError("Invalid credentials")
-                resp.raise_for_status()
-                data = await resp.json()
-                
-                # Extract token and expiration from response
-                token_data = data.get('data', {})
-                self.token = token_data.get('token')
-                
-                if not self.token:
-                    _LOGGER.error("No token received from API")
-                    raise EnviAuthenticationError("No token received from API")
-                
-                # Try to get expiration from response, default to 1 hour
-                expires_in = token_data.get('expires_in', 3600)  # Default 1 hour
-                self.token_expires = datetime.now() + timedelta(seconds=expires_in)
-                
-                _LOGGER.debug(f"Authentication successful, token expires at {self.token_expires}")
-                return self.token
-                
-        except aiohttp.ClientError as e:
-            _LOGGER.error(f"Network error during authentication: {e}")
-            raise EnviAuthenticationError(f"Network error during authentication: {e}")
-        except Exception as e:
-            _LOGGER.error(f"Authentication failed: {e}")
-            raise EnviAuthenticationError(f"Authentication error: {e}")
 
+        try:
+            response_data = await self._request("post", "auth/login", json=payload)
+            self.token = response_data["data"]["token"]
+
+            # Start with whatever the API tells us (often missing or wrong)
+            expires_in = response_data["data"].get("expires_in")
+            self.token_expires = datetime.now(timezone.utc) + timedelta(seconds=expires_in or 3600)
+
+            # THIS IS THE FIX — parse real expiry from the JWT (like the working Hubitat version)
+            jwt_expiry = self._parse_jwt_expiry(self.token)
+            if jwt_expiry and jwt_expiry > self.token_expires:
+                _LOGGER.info(
+                    "Corrected token expiry using JWT: %s → %s (now once per year)",
+                    self.token_expires.isoformat(timespec="minutes"),
+                    jwt_expiry.isoformat(timespec="minutes"),
+                )
+                self.token_expires = jwt_expiry
+
+            _LOGGER.debug("Authentication successful")
+        except Exception as err:
+            raise EnviAuthenticationError(f"Authentication failed: {err}") from err
+    def _parse_jwt_expiry(self, token: str) -> datetime | None:
+        """Extract the real 'exp' claim from the Envi JWT token — exactly like the working Hubitat integration."""
+        try:
+            payload_b64 = token.split(".")[1]
+            payload_b64 += "=" * (-len(payload_b64) % 4)  # fix padding
+            payload_json = base64.urlsafe_b64decode(payload_b64)
+            claims = json.loads(payload_json)
+            exp = claims.get("exp")
+            if exp:
+                return datetime.fromtimestamp(exp, tz=timezone.utc)
+        except Exception as exc:
+            _LOGGER.debug("Could not parse JWT expiry (%s) — falling back to expires_in value", exc)
+        return None
+        
     async def _is_token_valid(self):
         """Check if current token is still valid."""
         if not self.token or not self.token_expires:
