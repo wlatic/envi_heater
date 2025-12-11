@@ -10,23 +10,18 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class EnviApiError(Exception):
-    """Base exception for Envi API errors."""
     pass
 
 
 class EnviAuthenticationError(EnviApiError):
-    """Authentication failed."""
     pass
 
 
 class EnviDeviceError(EnviApiError):
-    """Device operation failed."""
     pass
 
 
 class EnviApiClient:
-    """Central API client with token management for all devices."""
-
     def __init__(self, session: aiohttp.ClientSession, username: str, password: str):
         self.session = session
         self.username = username
@@ -38,7 +33,7 @@ class EnviApiClient:
         self.timeout = ClientTimeout(total=15)
 
     async def authenticate(self) -> None:
-        """Authenticate and get access token."""
+        """Login and store token + real JWT expiry."""
         payload = {
             "username": self.username,
             "password": self.password,
@@ -47,85 +42,76 @@ class EnviApiClient:
             "device_type": "homeassistant",
         }
 
-        try:
-            response_data = await self._request("post", "auth/login", json=payload)
-            self.token = response_data["data"]["token"]
+        # Direct request — no recursion, no lock needed here
+        async with self.session.post(
+            f"{self.base_url}/auth/login",
+            json=payload,
+            timeout=self.timeout,
+        ) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                raise EnviAuthenticationError(f"Login failed ({resp.status}): {text}")
 
-            expires_in = response_data["data"].get("expires_in")
-            self.token_expires = datetime.now(timezone.utc) + timedelta(
-                seconds=expires_in or 3600
-            )
+            data = await resp.json()
 
-            # Use real JWT expiry (this is what makes it rock-solid like the Hubitat version)
-            jwt_expiry = self._parse_jwt_expiry(self.token)
-            if jwt_expiry and jwt_expiry > self.token_expires:
-                _LOGGER.info(
-                    "Corrected token expiry using JWT → now valid for ~1 year"
-                )
-                self.token_expires = jwt_expiry
+        self.token = data["data"]["token"]
 
-            _LOGGER.debug("Authentication successful")
-        except Exception as err:
-            raise EnviAuthenticationError(f"Authentication failed: {err}") from err
+        # Use JWT expiry (real one, ~1 year) instead of broken expires_in
+        jwt_expiry = self._parse_jwt_expiry(self.token)
+        if jwt_expiry:
+            self.token_expires = jwt_expiry
+            _LOGGER.info("Envi token authenticated — valid until %s", jwt_expiry.strftime("%Y-%m-%d"))
+        else:
+            # Fallback (should never happen)
+            self.token_expires = datetime.now(timezone.utc) + timedelta(days=365)
 
     def _parse_jwt_expiry(self, token: str) -> datetime | None:
-        """Parse the real 'exp' claim from the JWT token."""
         try:
-            payload_b64 = token.split(".")[1]
-            payload_b64 += "=" * (-len(payload_b64) % 4)
-            payload_json = base64.urlsafe_b64decode(payload_b64)
-            claims = json.loads(payload_json)
-            exp = claims.get("exp")
-            if exp:
-                return datetime.fromtimestamp(exp, tz=timezone.utc)
-        except Exception as exc:
-            _LOGGER.debug("JWT expiry parse failed (%s) — using expires_in", exc)
+            payload = token.split(".")[1]
+            payload += "=" * (-len(payload) % 4)
+            claims = json.loads(base64.urlsafe_b64decode(payload))
+            if claims.get("exp"):
+                return datetime.fromtimestamp(claims["exp"], tz=timezone.utc)
+        except Exception as e:
+            _LOGGER.debug("JWT parse failed: %s", e)
         return None
 
-    async def _is_token_valid(self) -> bool:
-        """Check if current token is still valid (5-minute buffer)."""
-        if not self.token or not self.token_expires:
-            return False
-        return datetime.now(timezone.utc) < (self.token_expires - timedelta(minutes=5))
-
     async def _request(self, method: str, endpoint: str, **kwargs) -> dict:
-        """Perform API request with automatic token refresh on 401/403."""
-        if not self.token:
-            await self.authenticate()
+        """Make API call — automatically refreshes token only on 401/403."""
+        # Make sure we have a valid token before entering the lock
+        if not self.token or not self.token_expires or datetime.now(timezone.utc) >= self.token_expires - timedelta(minutes=5):
+            async with self._refresh_lock:  # prevent parallel refreshes
+                # Double-check after acquiring lock
+                if not self.token or datetime.now(timezone.utc) >= self.token_expires - timedelta(minutes=5):
+                    await self.authenticate()
 
-        headers = kwargs.setdefault("headers", {})
+        headers = kwargs.pop("headers", {})
         headers["Authorization"] = f"Bearer {self.token}"
-        headers.setdefault("Accept", "application/json")
+        headers["Accept"] = "application/json"
+        kwargs["headers"] = headers
 
         url = f"{self.base_url}/{endpoint}"
 
-        async with self._refresh_lock:
-            try:
-                async with self.session.request(
-                    method.upper(), url, timeout=self.timeout, **kwargs
-                ) as response:
-                    if response.status in (401, 403):
-                        _LOGGER.debug("Token invalid (%s) — refreshing", response.status)
-                        await self.authenticate()
-                        headers["Authorization"] = f"Bearer {self.token}"
-                        async with self.session.request(
-                            method.upper(), url, timeout=self.timeout, headers=headers, **kwargs
-                        ) as retry:
-                            retry.raise_for_status()
-                            return await retry.json()
+        async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as resp:
+            if resp.status in (401, 403):
+                # Token was invalidated — refresh once and retry
+                async with self._refresh_lock:
+                    await self.authenticate()
+                    headers["Authorization"] = f"Bearer {self.token}"
+                    kwargs["headers"] = headers
 
-                    response.raise_for_status()
-                    return await response.json()
+                async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as retry_resp:
+                    retry_resp.raise_for_status()
+                    return await retry_resp.json()
 
-            except Exception as err:
-                _LOGGER.error(f"API request failed ({method} {endpoint}): {err}")
-                raise EnviDeviceError(f"API request failed: {err}") from err
+            resp.raise_for_status()
+            return await resp.json()
 
-    # ────────────────────── Device methods ──────────────────────
+    # ────────────────── Simple helpers ──────────────────
 
     async def fetch_all_device_ids(self):
         data = await self._request("GET", "device/list")
-        return [device["id"] for device in data.get("data", [])]
+        return [d["id"] for d in data.get("data", [])]
 
     async def get_device_state(self, device_id: str) -> dict:
         data = await self._request("GET", f"device/{device_id}")
@@ -133,10 +119,6 @@ class EnviApiClient:
 
     async def update_device(self, device_id: str, payload: dict):
         return await self._request("PATCH", f"device/update-temperature/{device_id}", json=payload)
-
-    async def get_device_info(self, device_id: str) -> dict:
-        data = await self._request("GET", f"device/info/{device_id}")
-        return data.get("data", {})
 
     async def test_connection(self) -> bool:
         try:
