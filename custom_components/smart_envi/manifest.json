@@ -3,6 +3,7 @@
   "name": "Envi Smart Heater",
   "requirements": ["aiohttp>=3.8.4"],
   "dependencies": [],
+  "codeowners": ["@wlatic"],
   "config_flow": true,
   "version": "15.0",
   "iot_class": "cloud_poll"

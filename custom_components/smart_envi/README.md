@@ -235,6 +235,11 @@ This integration is designed to be robust and user-friendly. If you encounter is
 4. Check sensor and binary sensor values for diagnostics
 5. Report issues with detailed logs
 
+## 🙏 Credits
+
+- **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
+- Enhanced with DataUpdateCoordinator, sensor platform, binary sensor platform, and improved error handling
+
 ## 📝 Changelog
 
 ### v15.0

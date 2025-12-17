@@ -57,6 +57,10 @@ For each heater:
 
 See the [full documentation](custom_components/smart_envi/README.md) for detailed usage, services, and troubleshooting.
 
+## Credits
+
+- **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
+
 ## Support
 
 For issues, feature requests, or questions, please open an issue on GitHub.

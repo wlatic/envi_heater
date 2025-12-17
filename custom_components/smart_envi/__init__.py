@@ -1,4 +1,8 @@
-"""Envi Heater integration."""
+"""Envi Heater integration.
+
+Originally created by @wlatic (https://github.com/wlatic)
+Enhanced with coordinator, sensors, and binary sensors.
+"""
 from __future__ import annotations
 
 import logging
