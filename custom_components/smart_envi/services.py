@@ -1,18 +1,72 @@
 import logging
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry
 from homeassistant.const import ATTR_ENTITY_ID
 
 from .const import DOMAIN
-from .api import EnviApiError, EnviDeviceError
+from .api import EnviApiClient, EnviApiError, EnviDeviceError
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_services(hass: HomeAssistant):
+
+def _get_device_id_from_entity(hass: HomeAssistant, entity_id: str) -> str | None:
+    """Get device_id from entity using entity registry or fallback parsing.
+    
+    Args:
+        hass: Home Assistant instance
+        entity_id: Entity ID to look up
+        
+    Returns:
+        Device ID string or None if not found
+    """
+    try:
+        # Try using entity registry first (preferred method)
+        registry = entity_registry.async_get(hass)
+        if registry_entry := registry.async_get(entity_id):
+            unique_id = registry_entry.unique_id
+            # Extract device_id from unique_id (format: "smart_envi_{device_id}")
+            if unique_id.startswith(f"{DOMAIN}_"):
+                return unique_id.replace(f"{DOMAIN}_", "", 1)
+            return unique_id
+    except Exception as e:
+        _LOGGER.debug("Failed to get device_id from entity registry: %s", e)
+    
+    # Fallback to parsing entity state attributes
+    try:
+        entity = hass.states.get(entity_id)
+        if entity:
+            unique_id = entity.attributes.get("unique_id", "")
+            if unique_id.startswith(f"{DOMAIN}_"):
+                return unique_id.replace(f"{DOMAIN}_", "", 1)
+            return unique_id if unique_id else None
+    except Exception as e:
+        _LOGGER.debug("Failed to get device_id from entity state: %s", e)
+    
+    return None
+
+
+def _get_client_from_domain(hass: HomeAssistant) -> EnviApiClient | None:
+    """Get the first available API client from domain data.
+    
+    Args:
+        hass: Home Assistant instance
+        
+    Returns:
+        EnviApiClient instance or None if not found
+    """
+    domain_data = hass.data.get(DOMAIN, {})
+    for entry_id, client in domain_data.items():
+        if entry_id != "services_setup" and isinstance(client, EnviApiClient):
+            return client
+    return None
+
+async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up custom services for Envi Heater integration."""
     
-    async def refresh_all_heaters(call: ServiceCall):
+    async def refresh_all_heaters(call: ServiceCall) -> None:
         """Refresh all Envi heaters."""
         _LOGGER.info("Refreshing all Envi heaters")
         refreshed_count = 0
@@ -49,7 +103,7 @@ async def async_setup_services(hass: HomeAssistant):
         
         _LOGGER.info("Refresh complete: %s devices refreshed, %s failed", refreshed_count, failed_count)
 
-    async def set_heater_schedule(call: ServiceCall):
+    async def set_heater_schedule(call: ServiceCall) -> None:
         """Set a schedule for a heater."""
         entity_id = call.data.get(ATTR_ENTITY_ID)
         schedule_data = call.data.get("schedule", {})
@@ -58,23 +112,12 @@ async def async_setup_services(hass: HomeAssistant):
             _LOGGER.error("No entity ID provided")
             return
         
-        # Find the entity to get device_id
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.error("Entity %s not found", entity_id)
+        device_id = _get_device_id_from_entity(hass, entity_id)
+        if not device_id:
+            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
             return
         
-        # Extract device_id from entity's unique_id
-        unique_id = entity.attributes.get("unique_id", "")
-        device_id = unique_id.replace(f"{DOMAIN}_", "") if unique_id.startswith(f"{DOMAIN}_") else unique_id
-        
-        # Get client from any entry (assuming single account)
-        client = None
-        for entry_id, api_client in hass.data[DOMAIN].items():
-            if entry_id != "services_setup":
-                client = api_client
-                break
-        
+        client = _get_client_from_domain(hass)
         if not client:
             _LOGGER.error("No Envi API client found")
             return
@@ -97,37 +140,30 @@ async def async_setup_services(hass: HomeAssistant):
                 await client.create_schedule(schedule_data)
             
             _LOGGER.info("Schedule updated successfully for %s", entity_id)
+        except EnviApiError as e:
+            _LOGGER.error("Failed to set schedule for %s: %s", entity_id, e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set schedule: {e}") from e
         except Exception as e:
             _LOGGER.error("Failed to set schedule for %s: %s", entity_id, e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set schedule: {str(e)}") from e
 
-    async def get_heater_status(call: ServiceCall):
+    async def get_heater_status(call: ServiceCall) -> dict | None:
         """Get detailed status of a heater."""
         entity_id = call.data.get(ATTR_ENTITY_ID)
         
         if not entity_id:
             _LOGGER.error("No entity ID provided")
-            return
+            return None
         
-        # Find the entity to get device_id
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.error("Entity %s not found", entity_id)
-            return
+        device_id = _get_device_id_from_entity(hass, entity_id)
+        if not device_id:
+            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
+            return None
         
-        # Extract device_id from entity's unique_id
-        unique_id = entity.attributes.get("unique_id", "")
-        device_id = unique_id.replace(f"{DOMAIN}_", "") if unique_id.startswith(f"{DOMAIN}_") else unique_id
-        
-        # Get client from any entry
-        client = None
-        for entry_id, api_client in hass.data[DOMAIN].items():
-            if entry_id != "services_setup":
-                client = api_client
-                break
-        
+        client = _get_client_from_domain(hass)
         if not client:
             _LOGGER.error("No Envi API client found")
-            return
+            return None
         
         try:
             # Get full device info
@@ -163,7 +199,7 @@ async def async_setup_services(hass: HomeAssistant):
             _LOGGER.error("Failed to get status for %s: %s", entity_id, e, exc_info=True)
             return None
 
-    async def test_connection(call: ServiceCall):
+    async def test_connection(call: ServiceCall) -> None:
         """Test connection to Envi API."""
         _LOGGER.info("Testing connection to Envi API")
         for entry_id, client in hass.data[DOMAIN].items():
@@ -179,7 +215,7 @@ async def async_setup_services(hass: HomeAssistant):
                 _LOGGER.error("Connection test error for entry %s: %s", entry_id, e)
 
 
-    async def set_freeze_protect(call: ServiceCall):
+    async def set_freeze_protect(call: ServiceCall) -> None:
         """Enable or disable freeze protection."""
         entity_id = call.data.get(ATTR_ENTITY_ID)
         enabled = call.data.get("enabled", True)
@@ -188,20 +224,12 @@ async def async_setup_services(hass: HomeAssistant):
             _LOGGER.error("No entity ID provided")
             return
         
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.error("Entity %s not found", entity_id)
+        device_id = _get_device_id_from_entity(hass, entity_id)
+        if not device_id:
+            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
             return
         
-        unique_id = entity.attributes.get("unique_id", "")
-        device_id = unique_id.replace(f"{DOMAIN}_", "") if unique_id.startswith(f"{DOMAIN}_") else unique_id
-        
-        client = None
-        for entry_id, api_client in hass.data[DOMAIN].items():
-            if entry_id != "services_setup":
-                client = api_client
-                break
-        
+        client = _get_client_from_domain(hass)
         if not client:
             _LOGGER.error("No Envi API client found")
             return
@@ -209,10 +237,14 @@ async def async_setup_services(hass: HomeAssistant):
         try:
             await client.set_freeze_protect(device_id, enabled)
             _LOGGER.info("Freeze protection %s for %s", "enabled" if enabled else "disabled", entity_id)
+        except EnviApiError as e:
+            _LOGGER.error("Failed to set freeze protection: %s", e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set freeze protection: {e}") from e
         except Exception as e:
             _LOGGER.error("Failed to set freeze protection: %s", e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set freeze protection: {str(e)}") from e
 
-    async def set_child_lock(call: ServiceCall):
+    async def set_child_lock(call: ServiceCall) -> None:
         """Enable or disable child lock."""
         entity_id = call.data.get(ATTR_ENTITY_ID)
         enabled = call.data.get("enabled", True)
@@ -221,20 +253,12 @@ async def async_setup_services(hass: HomeAssistant):
             _LOGGER.error("No entity ID provided")
             return
         
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.error("Entity %s not found", entity_id)
+        device_id = _get_device_id_from_entity(hass, entity_id)
+        if not device_id:
+            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
             return
         
-        unique_id = entity.attributes.get("unique_id", "")
-        device_id = unique_id.replace(f"{DOMAIN}_", "") if unique_id.startswith(f"{DOMAIN}_") else unique_id
-        
-        client = None
-        for entry_id, api_client in hass.data[DOMAIN].items():
-            if entry_id != "services_setup":
-                client = api_client
-                break
-        
+        client = _get_client_from_domain(hass)
         if not client:
             _LOGGER.error("No Envi API client found")
             return
@@ -242,10 +266,14 @@ async def async_setup_services(hass: HomeAssistant):
         try:
             await client.set_child_lock(device_id, enabled)
             _LOGGER.info("Child lock %s for %s", "enabled" if enabled else "disabled", entity_id)
+        except EnviApiError as e:
+            _LOGGER.error("Failed to set child lock: %s", e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set child lock: {e}") from e
         except Exception as e:
             _LOGGER.error("Failed to set child lock: %s", e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set child lock: {str(e)}") from e
 
-    async def set_hold(call: ServiceCall):
+    async def set_hold(call: ServiceCall) -> None:
         """Set temporary hold (prevents schedule changes)."""
         entity_id = call.data.get(ATTR_ENTITY_ID)
         enabled = call.data.get("enabled", True)
@@ -254,20 +282,12 @@ async def async_setup_services(hass: HomeAssistant):
             _LOGGER.error("No entity ID provided")
             return
         
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.error("Entity %s not found", entity_id)
+        device_id = _get_device_id_from_entity(hass, entity_id)
+        if not device_id:
+            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
             return
         
-        unique_id = entity.attributes.get("unique_id", "")
-        device_id = unique_id.replace(f"{DOMAIN}_", "") if unique_id.startswith(f"{DOMAIN}_") else unique_id
-        
-        client = None
-        for entry_id, api_client in hass.data[DOMAIN].items():
-            if entry_id != "services_setup":
-                client = api_client
-                break
-        
+        client = _get_client_from_domain(hass)
         if not client:
             _LOGGER.error("No Envi API client found")
             return
@@ -275,8 +295,12 @@ async def async_setup_services(hass: HomeAssistant):
         try:
             await client.set_hold(device_id, enabled)
             _LOGGER.info("Hold %s for %s", "enabled" if enabled else "disabled", entity_id)
+        except EnviApiError as e:
+            _LOGGER.error("Failed to set hold: %s", e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set hold: {e}") from e
         except Exception as e:
             _LOGGER.error("Failed to set hold: %s", e, exc_info=True)
+            raise HomeAssistantError(f"Failed to set hold: {str(e)}") from e
 
     # Register all services
     hass.services.async_register(
@@ -351,7 +375,7 @@ async def async_setup_services(hass: HomeAssistant):
         }),
     )
 
-async def async_unload_services(hass: HomeAssistant):
+async def async_unload_services(hass: HomeAssistant) -> None:
     """Unload custom services."""
     hass.services.async_remove(DOMAIN, "refresh_all")
     hass.services.async_remove(DOMAIN, "set_schedule")

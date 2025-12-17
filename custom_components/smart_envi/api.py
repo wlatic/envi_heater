@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 import aiohttp
 from aiohttp import ClientTimeout
 
+from .const import BASE_URL, ENDPOINTS
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -31,7 +33,7 @@ class EnviApiClient:
         self.session = session
         self.username = username
         self.password = password
-        self.base_url = "https://app-apis.enviliving.com/apis/v1"
+        self.base_url = BASE_URL
         self.token: str | None = None
         self.token_expires: datetime | None = None
         self._refresh_lock = asyncio.Lock()
@@ -47,7 +49,7 @@ class EnviApiClient:
             "device_id": fresh_device_id,
             "device_type": "homeassistant",
         }
-        url = f"{self.base_url}/auth/login"
+        url = f"{self.base_url}/{ENDPOINTS['auth_login']}"
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -152,33 +154,38 @@ class EnviApiClient:
             raise EnviApiError("Invalid response from API") from err
 
     async def fetch_all_device_ids(self) -> list[str]:
-        data = await self._request("GET", "device/list")
+        data = await self._request("GET", ENDPOINTS["device_list"])
         return [d["id"] for d in data.get("data", [])]
 
     async def get_device_state(self, device_id: str) -> dict:
-        data = await self._request("GET", f"device/{device_id}")
+        endpoint = ENDPOINTS["device_get"].format(device_id=device_id)
+        data = await self._request("GET", endpoint)
         return data.get("data", {})
 
     async def update_device(self, device_id: str, payload: dict) -> dict:
         """Update device temperature and/or state."""
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json=payload)
+        endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
+        return await self._request("PATCH", endpoint, json=payload)
 
     async def set_temperature(self, device_id: str, temperature: float) -> dict:
         """Set target temperature for a device."""
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json={"temperature": temperature})
+        endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
+        return await self._request("PATCH", endpoint, json={"temperature": temperature})
 
     async def set_state(self, device_id: str, state: int) -> dict:
         """Set device state (1 = on, 0 = off)."""
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json={"state": state})
+        endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
+        return await self._request("PATCH", endpoint, json={"state": state})
 
     async def set_mode(self, device_id: str, mode: int) -> dict:
         """Set device mode (1 = heat, 3 = auto, etc.)."""
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json={"mode": mode})
+        endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
+        return await self._request("PATCH", endpoint, json={"mode": mode})
 
     # Schedule Management
     async def get_schedule_list(self) -> list[dict]:
         """Get list of all schedules."""
-        data = await self._request("GET", "schedule/list")
+        data = await self._request("GET", ENDPOINTS["schedule_list"])
         return data.get("data", [])
 
     async def get_schedule(self, schedule_id: int) -> dict:
@@ -191,15 +198,17 @@ class EnviApiClient:
 
     async def create_schedule(self, schedule_data: dict) -> dict:
         """Create a new schedule."""
-        return await self._request("POST", "schedule/add", json=schedule_data)
+        return await self._request("POST", ENDPOINTS["schedule_add"], json=schedule_data)
 
     async def update_schedule(self, schedule_id: int, schedule_data: dict) -> dict:
         """Update an existing schedule."""
-        return await self._request("PUT", f"schedule/{schedule_id}", json=schedule_data)
+        endpoint = ENDPOINTS["schedule_update"].format(schedule_id=schedule_id)
+        return await self._request("PUT", endpoint, json=schedule_data)
 
     async def delete_schedule(self, schedule_id: int) -> dict:
         """Delete a schedule."""
-        return await self._request("DELETE", f"schedule/{schedule_id}")
+        endpoint = ENDPOINTS["schedule_delete"].format(schedule_id=schedule_id)
+        return await self._request("DELETE", endpoint)
 
     # Device Settings
     async def get_night_light_setting(self, device_id: str) -> dict:
@@ -220,7 +229,8 @@ class EnviApiClient:
             "on": on if on is not None else current.get("on"),
         }
         # Use the working update endpoint
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json={"night_light_setting": payload})
+        endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
+        return await self._request("PATCH", endpoint, json={"night_light_setting": payload})
 
     async def get_pilot_light_setting(self, device_id: str) -> dict:
         """Get pilot light settings for a device."""
@@ -240,7 +250,8 @@ class EnviApiClient:
             "auto_dim_time": auto_dim_time if auto_dim_time is not None else current.get("auto_dim_time"),
         }
         # Use the working update endpoint
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json={"pilot_light_setting": payload})
+        endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
+        return await self._request("PATCH", endpoint, json={"pilot_light_setting": payload})
 
     async def get_display_setting(self, device_id: str) -> dict:
         """Get display settings for a device."""
@@ -257,7 +268,8 @@ class EnviApiClient:
             "timeout": timeout if timeout else current.get("timeout"),
         }
         # Use the working update endpoint
-        return await self._request("PATCH", f"device/update-temperature/{device_id}", json={"display_setting": payload})
+        endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
+        return await self._request("PATCH", endpoint, json={"display_setting": payload})
 
     # Device Control Features
     # NOTE: These settings cannot be updated through the API.

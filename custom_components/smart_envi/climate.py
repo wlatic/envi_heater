@@ -4,10 +4,11 @@ from homeassistant.components.climate.const import HVACMode
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN
+from .const import DOMAIN, MIN_TEMPERATURE, MAX_TEMPERATURE
 from .api import EnviApiError, EnviDeviceError, EnviAuthenticationError
 from .coordinator import EnviDataUpdateCoordinator
 
@@ -34,8 +35,8 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_OFF
     )
     _attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
-    _attr_target_temperature_high = 86
-    _attr_target_temperature_low = 50
+    _attr_target_temperature_high = MAX_TEMPERATURE
+    _attr_target_temperature_low = MIN_TEMPERATURE
     _enable_turn_on_off_backwards_compatibility = False
     
     def _handle_coordinator_update(self) -> None:
@@ -207,13 +208,13 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             self._update_from_coordinator()
         except EnviDeviceError as e:
             _LOGGER.error("Device error setting temperature: %s", e)
-            raise
+            raise HomeAssistantError(f"Failed to set temperature: {e}") from e
         except EnviApiError as e:
             _LOGGER.error("API error setting temperature: %s", e)
-            raise
+            raise HomeAssistantError(f"Failed to set temperature: {e}") from e
         except Exception as e:
             _LOGGER.error("Unexpected error setting temperature: %s", e)
-            raise
+            raise HomeAssistantError(f"Failed to set temperature: {str(e)}") from e
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode."""
@@ -233,13 +234,13 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             self._update_from_coordinator()
         except EnviDeviceError as e:
             _LOGGER.error("Device error setting HVAC mode: %s", e)
-            raise
+            raise HomeAssistantError(f"Failed to set HVAC mode: {e}") from e
         except EnviApiError as e:
             _LOGGER.error("API error setting HVAC mode: %s", e)
-            raise
+            raise HomeAssistantError(f"Failed to set HVAC mode: {e}") from e
         except Exception as e:
             _LOGGER.error("Unexpected error setting HVAC mode: %s", e)
-            raise
+            raise HomeAssistantError(f"Failed to set HVAC mode: {str(e)}") from e
 
 async def async_setup_entry(
     hass: HomeAssistant,
