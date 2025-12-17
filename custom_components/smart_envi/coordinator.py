@@ -65,9 +65,6 @@ class EnviDataUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     device_data[str(device_id)] = result
 
-            # Ensure device_ids matches what we fetched
-            # (device_data keys should match device_ids, but keep device_ids as source of truth)
-
             # Store the data
             self.device_data = device_data
 

@@ -27,11 +27,6 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
     _attr_has_entity_name = True
     _attr_icon = "mdi:radiator"  # Default icon, will update based on state
     _attr_entity_registry_enabled_default = True
-    
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self._update_from_coordinator()
-        self.async_write_ha_state()
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
@@ -42,6 +37,11 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
     _attr_target_temperature_high = 86
     _attr_target_temperature_low = 50
     _enable_turn_on_off_backwards_compatibility = False
+    
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_from_coordinator()
+        self.async_write_ha_state()
 
     def __init__(self, coordinator: EnviDataUpdateCoordinator, device_id: str):
         """Initialize the heater."""
@@ -71,7 +71,7 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
         # Update from coordinator data
         self._update_from_coordinator()
 
-    def _update_from_coordinator(self):
+    def _update_from_coordinator(self) -> None:
         """Update entity state from coordinator data."""
         data = self.coordinator.get_device_data(self.device_id)
         if not data:
@@ -146,17 +146,17 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
         }
 
     @property
-    def available(self):
+    def available(self) -> bool:
         """Return if entity is available."""
         return self.coordinator.last_update_success and self.coordinator.get_device_data(self.device_id) is not None
 
     @property
-    def current_temperature(self):
+    def current_temperature(self) -> float | None:
         """Return current temperature."""
         return self._current_temperature
 
     @property
-    def target_temperature(self):
+    def target_temperature(self) -> float | None:
         """Return target temperature."""
         return self._target_temperature
 
@@ -185,7 +185,7 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             configuration_url="https://app.enviliving.com",
         )
 
-    async def async_set_temperature(self, **kwargs):
+    async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
@@ -215,7 +215,7 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             _LOGGER.error("Unexpected error setting temperature: %s", e)
             raise
 
-    async def async_set_hvac_mode(self, hvac_mode):
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode."""
         try:
             if hvac_mode == HVACMode.HEAT:

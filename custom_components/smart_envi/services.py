@@ -71,8 +71,9 @@ async def async_setup_services(hass: HomeAssistant):
         # Get client from any entry (assuming single account)
         client = None
         for entry_id, api_client in hass.data[DOMAIN].items():
-            client = api_client
-            break
+            if entry_id != "services_setup":
+                client = api_client
+                break
         
         if not client:
             _LOGGER.error("No Envi API client found")
@@ -120,8 +121,9 @@ async def async_setup_services(hass: HomeAssistant):
         # Get client from any entry
         client = None
         for entry_id, api_client in hass.data[DOMAIN].items():
-            client = api_client
-            break
+            if entry_id != "services_setup":
+                client = api_client
+                break
         
         if not client:
             _LOGGER.error("No Envi API client found")
@@ -165,14 +167,16 @@ async def async_setup_services(hass: HomeAssistant):
         """Test connection to Envi API."""
         _LOGGER.info("Testing connection to Envi API")
         for entry_id, client in hass.data[DOMAIN].items():
+            if entry_id == "services_setup":
+                continue
             try:
                 is_connected = await client.test_connection()
                 if is_connected:
-                    _LOGGER.info(f"Connection test successful for entry {entry_id}")
+                    _LOGGER.info("Connection test successful for entry %s", entry_id)
                 else:
-                    _LOGGER.error(f"Connection test failed for entry {entry_id}")
+                    _LOGGER.error("Connection test failed for entry %s", entry_id)
             except Exception as e:
-                _LOGGER.error(f"Connection test error for entry {entry_id}: {e}")
+                _LOGGER.error("Connection test error for entry %s: %s", entry_id, e)
 
 
     async def set_freeze_protect(call: ServiceCall):
@@ -194,8 +198,9 @@ async def async_setup_services(hass: HomeAssistant):
         
         client = None
         for entry_id, api_client in hass.data[DOMAIN].items():
-            client = api_client
-            break
+            if entry_id != "services_setup":
+                client = api_client
+                break
         
         if not client:
             _LOGGER.error("No Envi API client found")
@@ -226,8 +231,9 @@ async def async_setup_services(hass: HomeAssistant):
         
         client = None
         for entry_id, api_client in hass.data[DOMAIN].items():
-            client = api_client
-            break
+            if entry_id != "services_setup":
+                client = api_client
+                break
         
         if not client:
             _LOGGER.error("No Envi API client found")
@@ -258,8 +264,9 @@ async def async_setup_services(hass: HomeAssistant):
         
         client = None
         for entry_id, api_client in hass.data[DOMAIN].items():
-            client = api_client
-            break
+            if entry_id != "services_setup":
+                client = api_client
+                break
         
         if not client:
             _LOGGER.error("No Envi API client found")

@@ -120,7 +120,7 @@ class EnviApiClient:
                     async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as retry:
                         retry.raise_for_status()
                         data = await retry.json()
-                        if data.get("status") != "success" and resp.status not in (200, 201, 204):
+                        if data.get("status") != "success" and retry.status not in (200, 201, 204):
                             msg = data.get("msg", "Unknown error")
                             raise EnviApiError(f"API error: {msg}")
                         return data
@@ -159,7 +159,7 @@ class EnviApiClient:
         data = await self._request("GET", f"device/{device_id}")
         return data.get("data", {})
 
-    async def update_device(self, device_id: str, payload: dict):
+    async def update_device(self, device_id: str, payload: dict) -> dict:
         """Update device temperature and/or state."""
         return await self._request("PATCH", f"device/update-temperature/{device_id}", json=payload)
 
