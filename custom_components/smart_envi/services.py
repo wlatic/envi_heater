@@ -220,6 +220,85 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.error("Unexpected error setting schedule for %s: %s", entity_id, e, exc_info=True)
             raise HomeAssistantError(f"Failed to set schedule: {str(e)}") from e
 
+    async def get_heater_schedule(call: ServiceCall) -> dict:
+        """Get the current schedule for a Smart Envi heater.
+        
+        Args:
+            call: Service call with entity_id
+            
+        Returns:
+            Dictionary containing schedule information:
+            - schedule_id: Schedule ID (if exists)
+            - enabled: Whether schedule is enabled
+            - name: Schedule name
+            - times: List of schedule time entries (if available)
+            - device_id: Associated device ID
+            
+        Raises:
+            HomeAssistantError: If entity_id is missing, device_id cannot be determined,
+                API client is unavailable, or schedule retrieval fails
+        """
+        entity_id = call.data.get(ATTR_ENTITY_ID)
+        
+        if not entity_id:
+            raise HomeAssistantError("Entity ID is required")
+        
+        device_id = _get_device_id_from_entity(hass, entity_id)
+        if not device_id:
+            raise HomeAssistantError(f"Could not determine device_id for entity {entity_id}")
+        
+        client = _get_client_from_domain(hass)
+        if not client:
+            raise HomeAssistantError("Smart Envi integration not configured or API client unavailable")
+        
+        try:
+            # Get device state to find schedule_id
+            device_data = await client.get_device_state(device_id)
+            schedule_info = device_data.get("schedule", {})
+            
+            schedule_id = None
+            if isinstance(schedule_info, dict):
+                schedule_id = schedule_info.get("schedule_id") or schedule_info.get("id")
+            
+            # If schedule_id exists, try to get full schedule details
+            schedule_data = {
+                "device_id": device_id,
+                "schedule_id": schedule_id,
+                "enabled": schedule_info.get("enabled", False) if isinstance(schedule_info, dict) else False,
+                "name": schedule_info.get("name") or schedule_info.get("title") if isinstance(schedule_info, dict) else None,
+                "temperature": schedule_info.get("temperature") if isinstance(schedule_info, dict) else None,
+                "times": schedule_info.get("times", []) if isinstance(schedule_info, dict) else [],
+            }
+            
+            # If we have a schedule_id, try to get more details from schedule list
+            if schedule_id:
+                try:
+                    schedule_list = await client.get_schedule_list()
+                    for schedule in schedule_list:
+                        if isinstance(schedule, dict) and schedule.get("id") == schedule_id:
+                            # Merge additional schedule details
+                            schedule_data.update({
+                                "enabled": schedule.get("enabled", schedule_data["enabled"]),
+                                "name": schedule.get("name") or schedule_data["name"],
+                                "temperature": schedule.get("temperature") or schedule_data["temperature"],
+                                "times": schedule.get("times", schedule_data["times"]),
+                                "trigger_time": schedule.get("trigger_time"),
+                                "day": schedule.get("day"),
+                            })
+                            break
+                except Exception as e:
+                    _LOGGER.debug("Could not fetch full schedule details: %s", e)
+                    # Continue with device state schedule info
+            
+            _LOGGER.info("Retrieved schedule for %s: %s", entity_id, schedule_data)
+            return schedule_data
+        except EnviApiError as e:
+            _LOGGER.error("API error getting schedule for %s: %s", entity_id, e, exc_info=True)
+            raise HomeAssistantError(f"Failed to get schedule: {e}") from e
+        except Exception as e:
+            _LOGGER.error("Failed to get schedule for %s: %s", entity_id, e, exc_info=True)
+            raise HomeAssistantError(f"Failed to get schedule: {str(e)}") from e
+
     async def get_heater_status(call: ServiceCall) -> dict:
         """Get detailed status of a Smart Envi heater.
         
@@ -463,6 +542,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
     hass.services.async_register(
         DOMAIN,
+        "get_schedule",
+        get_heater_schedule,
+        schema=vol.Schema({
+            vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        }),
+    )
+    
+    hass.services.async_register(
+        DOMAIN,
         "get_status",
         get_heater_status,
         schema=vol.Schema({
@@ -511,6 +599,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
     """Unload custom services."""
     hass.services.async_remove(DOMAIN, "refresh_all")
     hass.services.async_remove(DOMAIN, "set_schedule")
+    hass.services.async_remove(DOMAIN, "get_schedule")
     hass.services.async_remove(DOMAIN, "get_status")
     hass.services.async_remove(DOMAIN, "test_connection")
     hass.services.async_remove(DOMAIN, "set_freeze_protect")
