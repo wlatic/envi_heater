@@ -167,15 +167,6 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                         vol.Required(
                             "scan_interval",
                             default=current_scan_interval,
-                            description=(
-                                f"Polling Interval (seconds): How often to check for device updates.\n\n"
-                                f"• Default: 30 seconds (recommended)\n"
-                                f"• Range: {MIN_SCAN_INTERVAL}-{MAX_SCAN_INTERVAL} seconds\n"
-                                f"• Lower values = more frequent updates but higher API usage\n"
-                                f"• Higher values = less API usage but slower response to changes\n"
-                                f"• Recommended: 30 seconds for most users\n"
-                                f"• Minimum 10 seconds to avoid API rate limiting"
-                            ),
                         ): vol.All(
                             vol.Coerce(int),
                             vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
@@ -183,14 +174,6 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                         vol.Required(
                             "api_timeout",
                             default=current_api_timeout,
-                            description=(
-                                f"API Timeout (seconds): Maximum time to wait for API responses.\n\n"
-                                f"• Default: 15 seconds (recommended)\n"
-                                f"• Range: {MIN_API_TIMEOUT}-{MAX_API_TIMEOUT} seconds\n"
-                                f"• Increase if you have slow internet or frequent timeout errors\n"
-                                f"• Decrease if you want faster failure detection\n"
-                                f"• Recommended: 15 seconds for most users"
-                            ),
                         ): vol.All(
                             vol.Coerce(int),
                             vol.Range(min=MIN_API_TIMEOUT, max=MAX_API_TIMEOUT),
@@ -441,38 +424,15 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     "enabled",
                     default=current_schedule.get("enabled", False),
-                    description="Enable or disable this schedule. When disabled, the schedule will not run."
                 ): bool,
                 vol.Optional(
                     "name",
                     default=current_schedule.get("name", ""),
-                    description="Optional name for this schedule (e.g., 'Weekday Schedule', 'Weekend Schedule')"
                 ): str,
                 vol.Optional(
                     "time_entries",
                     default=time_entries_str,
-                    description=(
-                        f"Schedule Time Entries\n\n"
-                        f"Format: HH:MM:SS,temperature,enabled\n"
-                        f"• Separate multiple entries with | (pipe)\n"
-                        f"• Temperature range: {MIN_TEMPERATURE}-{MAX_TEMPERATURE}°F\n"
-                        f"• Enabled: true or false\n\n"
-                        f"Examples:\n"
-                        f"• Single entry: 08:00:00,72,true\n"
-                        f"• Multiple entries: 08:00:00,72,true|18:00:00,68,true\n"
-                        f"• Weekday schedule: 06:00:00,70,true|08:00:00,72,true|17:00:00,70,true|22:00:00,65,true\n"
-                        f"• Weekend schedule: 08:00:00,70,true|22:00:00,68,true\n\n"
-                        f"Sample Schedules:\n"
-                        f"• Morning/Evening: 07:00:00,72,true|18:00:00,70,true\n"
-                        f"• All Day: 00:00:00,70,true\n"
-                        f"• Work Hours: 06:00:00,70,true|08:00:00,65,true|17:00:00,70,true|22:00:00,68,true"
-                    )
                 ): str,
             }),
             errors=errors,
-            description_placeholders={
-                "entity_name": entity_name,
-                "min_temp": str(MIN_TEMPERATURE),
-                "max_temp": str(MAX_TEMPERATURE),
-            },
         )
