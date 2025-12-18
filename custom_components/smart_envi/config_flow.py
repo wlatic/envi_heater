@@ -70,16 +70,11 @@ class EnviHeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> EnviHeaterOptionsFlowHandler:
         """Get the options flow for this handler."""
-        return EnviHeaterOptionsFlowHandler(config_entry)
+        return EnviHeaterOptionsFlowHandler()
 
 
 class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Smart Envi."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        super().__init__()
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         """Manage the options."""
@@ -88,13 +83,25 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             # Validate scan interval
             scan_interval = user_input.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-            if scan_interval < MIN_SCAN_INTERVAL or scan_interval > MAX_SCAN_INTERVAL:
-                errors["scan_interval"] = f"Scan interval must be between {MIN_SCAN_INTERVAL} and {MAX_SCAN_INTERVAL} seconds"
+            try:
+                scan_interval = int(scan_interval)
+            except (ValueError, TypeError):
+                errors["scan_interval"] = "Scan interval must be a number"
+            
+            if not errors.get("scan_interval"):
+                if scan_interval < MIN_SCAN_INTERVAL or scan_interval > MAX_SCAN_INTERVAL:
+                    errors["scan_interval"] = f"Scan interval must be between {MIN_SCAN_INTERVAL} and {MAX_SCAN_INTERVAL} seconds"
             
             # Validate API timeout
             api_timeout = user_input.get("api_timeout", DEFAULT_API_TIMEOUT)
-            if api_timeout < MIN_API_TIMEOUT or api_timeout > MAX_API_TIMEOUT:
-                errors["api_timeout"] = f"API timeout must be between {MIN_API_TIMEOUT} and {MAX_API_TIMEOUT} seconds"
+            try:
+                api_timeout = int(api_timeout)
+            except (ValueError, TypeError):
+                errors["api_timeout"] = "API timeout must be a number"
+            
+            if not errors.get("api_timeout"):
+                if api_timeout < MIN_API_TIMEOUT or api_timeout > MAX_API_TIMEOUT:
+                    errors["api_timeout"] = f"API timeout must be between {MIN_API_TIMEOUT} and {MAX_API_TIMEOUT} seconds"
 
             if not errors:
                 # Store options
