@@ -198,7 +198,6 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                     }
                 ),
                 errors=errors,
-                description="Configure how often the integration checks for device updates and how long to wait for API responses.",
             )
         except Exception as err:
             _LOGGER.exception("Error in integration options flow: %s", err)
@@ -471,7 +470,6 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                 ): str,
             }),
             errors=errors,
-            description=f"Edit schedule for {entity_name}. Set times when the heater should change temperature automatically.",
             description_placeholders={
                 "entity_name": entity_name,
                 "min_temp": str(MIN_TEMPERATURE),
