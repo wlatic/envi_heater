@@ -64,11 +64,11 @@ def _get_client_from_domain(hass: HomeAssistant) -> EnviApiClient | None:
     return None
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Set up custom services for Envi Heater integration."""
+    """Set up custom services for Smart Envi integration."""
     
     async def refresh_all_heaters(call: ServiceCall) -> None:
-        """Refresh all Envi heaters."""
-        _LOGGER.info("Refreshing all Envi heaters")
+        """Refresh all Smart Envi heaters."""
+        _LOGGER.info("Refreshing all Smart Envi heaters")
         refreshed_count = 0
         failed_count = 0
         
@@ -119,7 +119,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Envi API client found")
+            _LOGGER.error("No Smart Envi API client found")
             return
         
         try:
@@ -162,7 +162,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Envi API client found")
+            _LOGGER.error("No Smart Envi API client found")
             return None
         
         try:
@@ -200,8 +200,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             return None
 
     async def test_connection(call: ServiceCall) -> None:
-        """Test connection to Envi API."""
-        _LOGGER.info("Testing connection to Envi API")
+        """Test connection to Smart Envi API."""
+        _LOGGER.info("Testing connection to Smart Envi API")
         for entry_id, client in hass.data[DOMAIN].items():
             if entry_id == "services_setup":
                 continue
@@ -231,7 +231,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Envi API client found")
+            _LOGGER.error("No Smart Envi API client found")
             return
         
         try:
@@ -260,7 +260,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Envi API client found")
+            _LOGGER.error("No Smart Envi API client found")
             return
         
         try:
@@ -289,7 +289,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Envi API client found")
+            _LOGGER.error("No Smart Envi API client found")
             return
         
         try:

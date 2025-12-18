@@ -1,5 +1,7 @@
 # Envi Smart Heater - Home Assistant Integration
 
+> **⚠️ DISCLAIMER**: This is an **UNOFFICIAL** integration. This integration is not created, maintained, or endorsed by EHEAT, Inc. or Envi. It uses the Envi API in an unofficial capacity. Use at your own risk.
+
 Custom component for Home Assistant to interact with [Envi eHeat Smart Heaters](https://www.eheat.com/).
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
@@ -57,9 +59,14 @@ For each heater:
 
 See the [full documentation](custom_components/smart_envi/README.md) for detailed usage, services, and troubleshooting.
 
+## ⚠️ Disclaimer
+
+This is an **UNOFFICIAL** integration. This integration is not created, maintained, or endorsed by EHEAT, Inc. or Envi. It uses the Envi API in an unofficial capacity. Use at your own risk.
+
 ## Credits
 
 - **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
+- **Manufacturer**: [EHEAT, Inc.](https://www.eheat.com/) - Envi Smart Heaters
 
 ## Support
 

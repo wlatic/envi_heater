@@ -1,6 +1,8 @@
 # Envi Smart Heater Integration
 
-A comprehensive Home Assistant integration for Envi Smart Heaters with enhanced reliability, error handling, and advanced features.
+> **⚠️ DISCLAIMER**: This is an **UNOFFICIAL** integration. This integration is not created, maintained, or endorsed by EHEAT, Inc. or Envi. It uses the Envi API in an unofficial capacity. Use at your own risk.
+
+A comprehensive Home Assistant integration for Envi Smart Heaters (manufactured by [EHEAT, Inc.](https://www.eheat.com/)) with enhanced reliability, error handling, and advanced features.
 
 ## 🚀 What's New in v15.0
 
@@ -235,10 +237,22 @@ This integration is designed to be robust and user-friendly. If you encounter is
 4. Check sensor and binary sensor values for diagnostics
 5. Report issues with detailed logs
 
+## ⚠️ Disclaimer
+
+This is an **UNOFFICIAL** integration. This integration is:
+- **NOT** created, maintained, or endorsed by EHEAT, Inc. or Envi
+- **NOT** an official Home Assistant integration
+- Uses the Envi API in an **unofficial capacity**
+- Provided "as-is" without warranty
+- May stop working if EHEAT changes their API
+
+Use at your own risk. The developers are not responsible for any issues that may arise from using this integration.
+
 ## 🙏 Credits
 
 - **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
 - Enhanced with DataUpdateCoordinator, sensor platform, binary sensor platform, and improved error handling
+- **Manufacturer**: [EHEAT, Inc.](https://www.eheat.com/) - Envi Smart Heaters
 
 ## 📝 Changelog
 

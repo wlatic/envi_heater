@@ -1,4 +1,4 @@
-"""Binary sensors for Envi Heater integration."""
+"""Binary sensors for Smart Envi integration."""
 from __future__ import annotations
 
 import logging
@@ -54,7 +54,7 @@ class EnviBinarySensor(CoordinatorEntity, BinarySensorEntity):
         return DeviceInfo(
             identifiers={(DOMAIN, self.device_id)},
             name=self._device_name,
-            manufacturer="Envi",
+            manufacturer="EHEAT",
         )
 
     def _handle_coordinator_update(self) -> None:

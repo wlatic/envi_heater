@@ -2,6 +2,8 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 
+> **⚠️ DISCLAIMER**: This is an **UNOFFICIAL** integration. This integration is not created, maintained, or endorsed by EHEAT, Inc. or Envi. It uses the Envi API in an unofficial capacity. Use at your own risk.
+
 A comprehensive Home Assistant integration for Envi Smart Heaters with enhanced reliability, error handling, and advanced features.
 
 ![Envi eHeat integration preview](example.png)
@@ -96,8 +98,20 @@ Issues and pull requests are welcome! Please check existing issues before creati
 
 This project is licensed under the MIT License.
 
+## ⚠️ Disclaimer
+
+This is an **UNOFFICIAL** integration. This integration is:
+- **NOT** created, maintained, or endorsed by EHEAT, Inc. or Envi
+- **NOT** an official Home Assistant integration
+- Uses the Envi API in an **unofficial capacity**
+- Provided "as-is" without warranty
+- May stop working if EHEAT changes their API
+
+Use at your own risk. The developers are not responsible for any issues that may arise from using this integration.
+
 ## Credits
 
 - **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
 - Integration enhanced and maintained for the Home Assistant community
-- Uses the Envi API for device communication
+- **Manufacturer**: [EHEAT, Inc.](https://www.eheat.com/) - Envi Smart Heaters
+- Uses the Envi API for device communication (unofficial use)

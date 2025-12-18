@@ -23,7 +23,7 @@ MODE_MAP = {
 
 
 class EnviHeater(CoordinatorEntity, ClimateEntity):
-    """Representation of an Envi Heater using centralized coordinator."""
+    """Representation of a Smart Envi heater using centralized coordinator."""
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:radiator"  # Default icon, will update based on state
@@ -55,7 +55,7 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
         device_data = coordinator.get_device_data(device_id) or {}
         
         # Get device name from data if available
-        device_name = device_data.get("name", f"Heater {device_id}")
+        device_name = device_data.get("name", f"Smart Envi {device_id}")
         self._attr_name = device_name
         self._attr_unique_id = f"{DOMAIN}_{device_id}"
         
@@ -164,9 +164,9 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information."""
-        model = self._model_no or "Smart Heater"
+        model = self._model_no or "Smart Envi"
         if not model:
-            model = "Smart Heater"
+            model = "Smart Envi"
         
         # Build device name with location if available
         device_name = self._attr_name
@@ -176,15 +176,15 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             if location and location not in device_name:
                 device_name = f"{device_name} ({location})"
         
-        return DeviceInfo(
-            identifiers={(DOMAIN, str(self.device_id))},
-            name=device_name,
-            manufacturer="Envi",
-            model=model,
-            sw_version=self._firmware_version or "Unknown",
-            serial_number=self._serial_no,
-            configuration_url="https://app.enviliving.com",
-        )
+            return DeviceInfo(
+                identifiers={(DOMAIN, str(self.device_id))},
+                name=device_name,
+                manufacturer="EHEAT",
+                model=model,
+                sw_version=self._firmware_version or "Unknown",
+                serial_number=self._serial_no,
+                configuration_url="https://www.eheat.com",
+            )
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
@@ -248,17 +248,12 @@ async def async_setup_entry(
     async_add_entities
 ):
     """Set up all Envi heaters from a config entry."""
-    client = hass.data[DOMAIN][entry.entry_id]
-    
-    # Get or create coordinator for this entry
+    # Get coordinator (should already be created in __init__.py)
     coordinator_key = f"{DOMAIN}_coordinator_{entry.entry_id}"
-    if coordinator_key not in hass.data[DOMAIN]:
-        coordinator = EnviDataUpdateCoordinator(hass, client, entry.entry_id)
-        hass.data[DOMAIN][coordinator_key] = coordinator
-        # Start initial data fetch
-        await coordinator.async_config_entry_first_refresh()
-    else:
-        coordinator = hass.data[DOMAIN][coordinator_key]
+    coordinator = hass.data[DOMAIN].get(coordinator_key)
+    if not coordinator:
+        _LOGGER.error("Coordinator not found for entry %s", entry.entry_id)
+        return
     
     # Get device IDs from coordinator
     device_ids = coordinator.device_ids
@@ -266,7 +261,7 @@ async def async_setup_entry(
         _LOGGER.warning("No devices found for entry %s", entry.entry_id)
         return
 
-    _LOGGER.info("Found %s Envi heaters: %s", len(device_ids), device_ids)
+    _LOGGER.info("Found %s Smart Envi heaters: %s", len(device_ids), device_ids)
     
     # Create entities using coordinator
     heaters = [EnviHeater(coordinator, device_id) for device_id in device_ids]

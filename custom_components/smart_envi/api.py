@@ -6,11 +6,18 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
-from aiohttp import ClientTimeout
+from aiohttp import ClientError, ClientTimeout
 
 from .const import BASE_URL, ENDPOINTS
 
 _LOGGER = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+INITIAL_RETRY_DELAY = 1  # seconds
+MAX_RETRY_DELAY = 30  # seconds
+RETRYABLE_STATUS_CODES = (429, 500, 502, 503, 504)  # Rate limit and server errors
+RETRYABLE_EXCEPTIONS = (aiohttp.ClientError, asyncio.TimeoutError)
 
 
 class EnviApiError(Exception):
@@ -29,7 +36,21 @@ class EnviDeviceError(EnviApiError):
 
 
 class EnviApiClient:
-    def __init__(self, session: aiohttp.ClientSession, username: str, password: str):
+    def __init__(
+        self, 
+        session: aiohttp.ClientSession, 
+        username: str, 
+        password: str,
+        api_timeout: int = 15
+    ):
+        """Initialize Envi API client.
+        
+        Args:
+            session: aiohttp session
+            username: Envi account username
+            password: Envi account password
+            api_timeout: API request timeout in seconds (default: 15)
+        """
         self.session = session
         self.username = username
         self.password = password
@@ -37,7 +58,7 @@ class EnviApiClient:
         self.token: str | None = None
         self.token_expires: datetime | None = None
         self._refresh_lock = asyncio.Lock()
-        self.timeout = ClientTimeout(total=15)
+        self.timeout = ClientTimeout(total=api_timeout)
 
     async def authenticate(self) -> None:
         """Log in to Envi with a fresh unique device_id."""
@@ -90,8 +111,38 @@ class EnviApiClient:
             _LOGGER.debug("Failed to parse JWT expiry: %s", e)
         return None
 
+    def _validate_response(self, data: dict, endpoint: str) -> None:
+        """Validate API response structure.
+        
+        Args:
+            data: Response data dictionary
+            endpoint: API endpoint name for error context
+            
+        Raises:
+            EnviApiError: If response structure is invalid
+        """
+        if not isinstance(data, dict):
+            raise EnviApiError(f"Invalid response format from {endpoint}: expected dict, got {type(data).__name__}")
+        
+        # For device list endpoint, check for 'data' key
+        if "device/list" in endpoint:
+            if "data" not in data:
+                _LOGGER.warning("Device list response missing 'data' key: %s", data.keys())
+        
+        # For device endpoints, check for 'data' key
+        if endpoint.startswith("device/") and not endpoint.endswith("/list"):
+            if "data" not in data:
+                _LOGGER.warning("Device response missing 'data' key: %s", data.keys())
+
     async def _request(self, method: str, endpoint: str, **kwargs) -> dict:
-        """Internal request with automatic token refresh and error handling."""
+        """Internal request with automatic token refresh, retry logic, and error handling.
+        
+        Implements:
+        - Automatic token refresh
+        - Retry with exponential backoff for transient errors
+        - Rate limiting protection (429 handling)
+        - Comprehensive error handling
+        """
         if self.token is None:
             await self.authenticate()
 
@@ -111,56 +162,134 @@ class EnviApiClient:
         kwargs["headers"] = headers
         url = f"{self.base_url}/{endpoint}"
 
-        try:
-            async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as resp:
-                if resp.status in (401, 403):
-                    _LOGGER.info("Token expired – refreshing automatically")
-                    async with self._refresh_lock:
-                        await self.authenticate()
-                        headers["Authorization"] = f"Bearer {self.token}"
-                        kwargs["headers"] = headers
-                    async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as retry:
-                        retry.raise_for_status()
-                        data = await retry.json()
-                        if data.get("status") != "success" and retry.status not in (200, 201, 204):
-                            msg = data.get("msg", "Unknown error")
-                            raise EnviApiError(f"API error: {msg}")
-                        return data
-                
-                # Don't raise on 400 - we want to handle it ourselves
-                if resp.status == 400:
+        # Retry loop with exponential backoff
+        last_exception = None
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                async with self.session.request(method.upper(), url, timeout=self.timeout, **kwargs) as resp:
+                    # Handle authentication errors (always retry once)
+                    if resp.status in (401, 403):
+                        if attempt == 0:  # Only retry auth errors once
+                            _LOGGER.info("Token expired – refreshing automatically")
+                            async with self._refresh_lock:
+                                await self.authenticate()
+                                headers["Authorization"] = f"Bearer {self.token}"
+                                kwargs["headers"] = headers
+                            continue  # Retry the request
+                        else:
+                            _LOGGER.error("Authentication failed after retry")
+                            raise EnviAuthenticationError("Authentication failed")
+                    
+                    # Handle rate limiting (429)
+                    if resp.status == 429:
+                        retry_after = int(resp.headers.get("Retry-After", INITIAL_RETRY_DELAY * (2 ** attempt)))
+                        if attempt < MAX_RETRIES:
+                            _LOGGER.warning(
+                                "Rate limited (429). Retrying after %s seconds (attempt %s/%s)",
+                                retry_after, attempt + 1, MAX_RETRIES + 1
+                            )
+                            await asyncio.sleep(min(retry_after, MAX_RETRY_DELAY))
+                            continue
+                        else:
+                            _LOGGER.error("Rate limited (429) - max retries exceeded")
+                            raise EnviApiError("Rate limited - too many requests")
+                    
+                    # Handle server errors (retryable)
+                    if resp.status in RETRYABLE_STATUS_CODES:
+                        if attempt < MAX_RETRIES:
+                            delay = min(INITIAL_RETRY_DELAY * (2 ** attempt), MAX_RETRY_DELAY)
+                            _LOGGER.warning(
+                                "Server error %s. Retrying after %s seconds (attempt %s/%s)",
+                                resp.status, delay, attempt + 1, MAX_RETRIES + 1
+                            )
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            _LOGGER.error("Server error %s - max retries exceeded", resp.status)
+                            resp.raise_for_status()
+                    
+                    # Don't raise on 400 - we want to handle it ourselves
+                    if resp.status == 400:
+                        data = await resp.json()
+                        msg = data.get("msg", "Bad Request")
+                        msg_code = data.get("msgCode", "unknown")
+                        _LOGGER.error("API returned 400 Bad Request: %s (code: %s). Payload may be invalid.", msg, msg_code)
+                        raise EnviApiError(f"Bad Request: {msg} (code: {msg_code})")
+                    
+                    resp.raise_for_status()
                     data = await resp.json()
-                    msg = data.get("msg", "Bad Request")
-                    msg_code = data.get("msgCode", "unknown")
-                    _LOGGER.error("API returned 400 Bad Request: %s (code: %s). Payload may be invalid.", msg, msg_code)
-                    raise EnviApiError(f"Bad Request: {msg} (code: {msg_code})")
-                
-                resp.raise_for_status()
-                data = await resp.json()
-                
-                # Check API-level success status
-                if data.get("status") != "success" and resp.status not in (200, 201, 204):
-                    msg = data.get("msg", "Unknown error")
-                    msg_code = data.get("msgCode", "unknown")
-                    _LOGGER.warning("API returned error: %s (code: %s)", msg, msg_code)
-                    raise EnviApiError(f"API error: {msg} (code: {msg_code})")
-                
-                return data
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Network error during API request: %s", err)
-            raise EnviApiError(f"Network error: {err}") from err
-        except json.JSONDecodeError as err:
-            _LOGGER.error("Invalid JSON response from API")
-            raise EnviApiError("Invalid response from API") from err
+                    
+                    # Validate response structure
+                    self._validate_response(data, endpoint)
+                    
+                    # Check API-level success status
+                    if data.get("status") != "success" and resp.status not in (200, 201, 204):
+                        msg = data.get("msg", "Unknown error")
+                        msg_code = data.get("msgCode", "unknown")
+                        _LOGGER.warning("API returned error: %s (code: %s)", msg, msg_code)
+                        raise EnviApiError(f"API error: {msg} (code: {msg_code})")
+                    
+                    return data
+                    
+            except RETRYABLE_EXCEPTIONS as err:
+                last_exception = err
+                if attempt < MAX_RETRIES:
+                    delay = min(INITIAL_RETRY_DELAY * (2 ** attempt), MAX_RETRY_DELAY)
+                    _LOGGER.warning(
+                        "Network error during API request: %s. Retrying after %s seconds (attempt %s/%s)",
+                        err, delay, attempt + 1, MAX_RETRIES + 1
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    _LOGGER.error("Network error - max retries exceeded: %s", err)
+                    raise EnviApiError(f"Network error: {err}") from err
+            except json.JSONDecodeError as err:
+                _LOGGER.error("Invalid JSON response from API: %s", err)
+                raise EnviApiError("Invalid response from API") from err
+        
+        # If we exhausted retries, raise the last exception
+        if last_exception:
+            raise EnviApiError(f"Request failed after {MAX_RETRIES + 1} attempts: {last_exception}") from last_exception
+        raise EnviApiError("Request failed - unknown error")
 
     async def fetch_all_device_ids(self) -> list[str]:
+        """Fetch all device IDs with validation."""
         data = await self._request("GET", ENDPOINTS["device_list"])
-        return [d["id"] for d in data.get("data", [])]
+        device_list = data.get("data", [])
+        
+        if not isinstance(device_list, list):
+            _LOGGER.error("Invalid device list format: expected list, got %s", type(device_list).__name__)
+            return []
+        
+        device_ids = []
+        for device in device_list:
+            if not isinstance(device, dict):
+                _LOGGER.warning("Invalid device entry: expected dict, got %s", type(device).__name__)
+                continue
+            device_id = device.get("id")
+            if device_id:
+                device_ids.append(str(device_id))
+            else:
+                _LOGGER.warning("Device entry missing 'id' field: %s", device)
+        
+        return device_ids
 
     async def get_device_state(self, device_id: str) -> dict:
+        """Get device state with validation."""
         endpoint = ENDPOINTS["device_get"].format(device_id=device_id)
         data = await self._request("GET", endpoint)
-        return data.get("data", {})
+        device_data = data.get("data", {})
+        
+        if not isinstance(device_data, dict):
+            _LOGGER.error("Invalid device data format for device %s: expected dict, got %s", device_id, type(device_data).__name__)
+            return {}
+        
+        # Validate required fields
+        if "id" not in device_data and "serial_no" not in device_data:
+            _LOGGER.warning("Device data missing identifier fields: %s", list(device_data.keys()))
+        
+        return device_data
 
     async def update_device(self, device_id: str, payload: dict) -> dict:
         """Update device temperature and/or state."""

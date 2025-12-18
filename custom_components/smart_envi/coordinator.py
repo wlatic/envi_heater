@@ -1,8 +1,9 @@
-"""DataUpdateCoordinator for Envi Heater integration."""
+"""DataUpdateCoordinator for Smart Envi integration."""
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -16,13 +17,26 @@ _LOGGER = logging.getLogger(__name__)
 class EnviDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Envi device data."""
 
-    def __init__(self, hass: HomeAssistant, client: EnviApiClient, entry_id: str) -> None:
-        """Initialize the coordinator."""
+    def __init__(
+        self, 
+        hass: HomeAssistant, 
+        client: EnviApiClient, 
+        entry_id: str,
+        scan_interval: timedelta | None = None
+    ) -> None:
+        """Initialize the coordinator.
+        
+        Args:
+            hass: Home Assistant instance
+            client: Envi API client
+            entry_id: Config entry ID
+            scan_interval: Update interval (defaults to SCAN_INTERVAL constant)
+        """
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
+            update_interval=scan_interval or SCAN_INTERVAL,
         )
         self.client = client
         self.entry_id = entry_id
@@ -95,17 +109,33 @@ class EnviDataUpdateCoordinator(DataUpdateCoordinator):
             return None
 
     async def _fetch_device_data_safe(self, device_id: str) -> dict:
-        """Safely fetch device data with error handling."""
+        """Safely fetch device data with error handling and retry logic.
+        
+        This method handles transient errors gracefully by allowing the coordinator
+        to keep cached data if a device temporarily fails.
+        """
         device_id_str = str(device_id)
         try:
             data = await self.client.get_device_state(device_id_str)
+            
+            # Validate we got meaningful data
+            if not data or not isinstance(data, dict):
+                _LOGGER.warning("Empty or invalid data for device %s", device_id_str)
+                raise EnviDeviceError(f"Invalid data for device {device_id_str}")
+            
             _LOGGER.debug("Fetched data for device %s: %s", device_id_str, data.get("name", "Unknown"))
             return data
         except EnviDeviceError as err:
+            # Device-specific errors - don't retry, but log
             _LOGGER.warning("Device error for %s: %s", device_id_str, err)
             raise
+        except EnviApiError as err:
+            # API errors - may be transient, log but don't retry here (retry handled in API client)
+            _LOGGER.warning("API error fetching device %s: %s", device_id_str, err)
+            raise
         except Exception as err:
-            _LOGGER.warning("Unexpected error fetching device %s: %s", device_id_str, err)
+            # Unexpected errors - log with full context
+            _LOGGER.warning("Unexpected error fetching device %s: %s", device_id_str, err, exc_info=True)
             raise
 
     def get_device_data(self, device_id: str) -> dict | None:
