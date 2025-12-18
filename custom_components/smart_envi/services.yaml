@@ -1,0 +1,47 @@
+# Services for Smart Envi integration
+# Services are registered programmatically in services.py
+# This file provides service discovery metadata for Home Assistant
+
+refresh_all:
+  name: Refresh All
+  description: Refresh all Smart Envi heaters
+
+set_schedule:
+  name: Set Schedule
+  description: Set a schedule for a Smart Envi heater
+  target:
+    entity:
+      domain: climate
+
+get_status:
+  name: Get Status
+  description: Get detailed status of a Smart Envi heater
+  target:
+    entity:
+      domain: climate
+
+test_connection:
+  name: Test Connection
+  description: Test connection to Smart Envi API
+
+set_freeze_protect:
+  name: Set Freeze Protect
+  description: Enable or disable freeze protection (Note: This setting cannot be changed through the API and must be configured through the Envi mobile app)
+  target:
+    entity:
+      domain: climate
+
+set_child_lock:
+  name: Set Child Lock
+  description: Enable or disable child lock (Note: This setting cannot be changed through the API and must be configured through the Envi mobile app)
+  target:
+    entity:
+      domain: climate
+
+set_hold:
+  name: Set Hold
+  description: Set temporary hold (prevents schedule changes) (Note: This setting cannot be changed through the API and must be configured through the Envi mobile app)
+  target:
+    entity:
+      domain: climate
+
