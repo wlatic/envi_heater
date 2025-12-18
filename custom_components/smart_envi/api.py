@@ -349,29 +349,105 @@ class EnviApiClient:
 
     # Schedule Management
     async def get_schedule_list(self) -> list[dict]:
-        """Get list of all schedules."""
+        """Get list of all schedules.
+        
+        Returns:
+            List of schedule dictionaries, each containing:
+            - id: Schedule ID
+            - device_id: Associated device ID
+            - name: Schedule name
+            - enabled: Whether schedule is enabled
+            - temperature: Target temperature
+            - trigger_time: Time when schedule activates
+            - day: Day of week (if applicable)
+        """
         data = await self._request("GET", ENDPOINTS["schedule_list"])
-        return data.get("data", [])
+        schedule_list = data.get("data", [])
+        if not isinstance(schedule_list, list):
+            _LOGGER.warning("Invalid schedule list format: expected list, got %s", type(schedule_list).__name__)
+            return []
+        return schedule_list
 
     async def get_schedule(self, schedule_id: int) -> dict:
-        """Get a specific schedule by ID."""
+        """Get a specific schedule by ID.
+        
+        Args:
+            schedule_id: Schedule ID to retrieve
+            
+        Returns:
+            Schedule dictionary with schedule details
+            
+        Raises:
+            EnviDeviceError: If schedule is not found
+        """
         schedules = await self.get_schedule_list()
         for schedule in schedules:
-            if schedule.get("id") == schedule_id:
+            if isinstance(schedule, dict) and schedule.get("id") == schedule_id:
                 return schedule
         raise EnviDeviceError(f"Schedule {schedule_id} not found")
 
     async def create_schedule(self, schedule_data: dict) -> dict:
-        """Create a new schedule."""
+        """Create a new schedule.
+        
+        Args:
+            schedule_data: Dictionary containing schedule configuration:
+                - device_id: Device ID (required)
+                - enabled: bool - Whether schedule is enabled
+                - name: str (optional) - Schedule name
+                - temperature: float - Target temperature
+                - times: list (optional) - List of time entries
+                
+        Returns:
+            API response dictionary with created schedule data
+            
+        Raises:
+            EnviApiError: If schedule creation fails
+        """
+        if not isinstance(schedule_data, dict):
+            raise EnviApiError("Schedule data must be a dictionary")
+        
+        if "device_id" not in schedule_data:
+            raise EnviApiError("device_id is required for schedule creation")
+        
         return await self._request("POST", ENDPOINTS["schedule_add"], json=schedule_data)
 
     async def update_schedule(self, schedule_id: int, schedule_data: dict) -> dict:
-        """Update an existing schedule."""
+        """Update an existing schedule.
+        
+        Args:
+            schedule_id: Schedule ID to update
+            schedule_data: Dictionary containing schedule updates:
+                - enabled: bool (optional) - Whether schedule is enabled
+                - name: str (optional) - Schedule name
+                - temperature: float (optional) - Target temperature
+                - times: list (optional) - List of time entries
+                
+        Returns:
+            API response dictionary with updated schedule data
+            
+        Raises:
+            EnviApiError: If schedule update fails
+            EnviDeviceError: If schedule is not found
+        """
+        if not isinstance(schedule_data, dict):
+            raise EnviApiError("Schedule data must be a dictionary")
+        
         endpoint = ENDPOINTS["schedule_update"].format(schedule_id=schedule_id)
         return await self._request("PUT", endpoint, json=schedule_data)
 
     async def delete_schedule(self, schedule_id: int) -> dict:
-        """Delete a schedule."""
+        """Delete a schedule.
+        
+        Args:
+            schedule_id: Schedule ID to delete
+            
+        Returns:
+            API response dictionary
+            
+        Raises:
+            EnviApiError: If schedule deletion fails
+            EnviDeviceError: If schedule is not found
+        """
         endpoint = ENDPOINTS["schedule_delete"].format(schedule_id=schedule_id)
         return await self._request("DELETE", endpoint)
 

@@ -114,18 +114,29 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def set_heater_schedule(call: ServiceCall) -> None:
         """Set a schedule for a Smart Envi heater.
         
+        Schedule data structure:
+        - enabled: bool - Whether the schedule is enabled
+        - name: str (optional) - Schedule name
+        - times: list (optional) - List of schedule times with temperature
+          - time: str - Time in HH:MM:SS format
+          - temperature: float - Target temperature (50-86°F)
+          - enabled: bool - Whether this time slot is enabled
+        
         Args:
             call: Service call with entity_id and schedule data
             
         Raises:
             HomeAssistantError: If entity_id is missing, device_id cannot be determined,
-                or API client is unavailable
+                API client is unavailable, or schedule data is invalid
         """
         entity_id = call.data.get(ATTR_ENTITY_ID)
         schedule_data = call.data.get("schedule", {})
         
         if not entity_id:
             raise HomeAssistantError("Entity ID is required")
+        
+        if not schedule_data:
+            raise HomeAssistantError("Schedule data is required")
         
         device_id = _get_device_id_from_entity(hass, entity_id)
         if not device_id:
@@ -136,28 +147,77 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError("Smart Envi integration not configured or API client unavailable")
         
         try:
+            # Validate schedule data structure
+            if not isinstance(schedule_data, dict):
+                raise HomeAssistantError("Schedule data must be a dictionary")
+            
+            # Validate enabled field if present
+            if "enabled" in schedule_data and not isinstance(schedule_data["enabled"], bool):
+                raise HomeAssistantError("Schedule 'enabled' field must be a boolean")
+            
+            # Validate times if present
+            if "times" in schedule_data:
+                if not isinstance(schedule_data["times"], list):
+                    raise HomeAssistantError("Schedule 'times' must be a list")
+                for time_entry in schedule_data["times"]:
+                    if not isinstance(time_entry, dict):
+                        raise HomeAssistantError("Each schedule time entry must be a dictionary")
+                    if "temperature" in time_entry:
+                        temp = time_entry["temperature"]
+                        if not isinstance(temp, (int, float)) or temp < 50 or temp > 86:
+                            raise HomeAssistantError(
+                                f"Schedule temperature must be between 50 and 86°F, got {temp}"
+                            )
+            
             # Get current device data to find schedule_id
             device_data = await client.get_device_state(device_id)
             schedule_info = device_data.get("schedule", {})
-            schedule_id = schedule_info.get("schedule_id") if isinstance(schedule_info, dict) else None
+            schedule_id = None
             
-            # Build schedule payload (this may need adjustment based on actual API requirements)
-            # For now, we'll try to create/update based on what we know
+            if isinstance(schedule_info, dict):
+                schedule_id = schedule_info.get("schedule_id") or schedule_info.get("id")
+            
+            # Build schedule payload
+            # Include device_id for creation, schedule_id for updates
+            payload = schedule_data.copy()
+            
             if schedule_id:
+                # Update existing schedule
                 _LOGGER.info("Updating schedule %s for device %s", schedule_id, device_id)
-                # Note: Actual payload structure needs to be determined from API
-                await client.update_schedule(schedule_id, schedule_data)
+                _LOGGER.debug("Schedule update payload: %s", payload)
+                result = await client.update_schedule(schedule_id, payload)
+                _LOGGER.info("Schedule %s updated successfully for device %s", schedule_id, device_id)
             else:
+                # Create new schedule
                 _LOGGER.info("Creating new schedule for device %s", device_id)
-                schedule_data["device_id"] = device_id
-                await client.create_schedule(schedule_data)
+                payload["device_id"] = device_id
+                _LOGGER.debug("Schedule creation payload: %s", payload)
+                result = await client.create_schedule(payload)
+                _LOGGER.info("New schedule created successfully for device %s", device_id)
             
-            _LOGGER.info("Schedule updated successfully for %s", entity_id)
+            # Refresh device data to get updated schedule info
+            # Find the coordinator that manages this device
+            domain_data = hass.data.get(DOMAIN, {})
+            for entry_id, value in domain_data.items():
+                if entry_id == "services_setup":
+                    continue
+                coordinator_key = f"{DOMAIN}_coordinator_{entry_id}"
+                coordinator = domain_data.get(coordinator_key)
+                if coordinator and hasattr(coordinator, "async_refresh_device"):
+                    # Check if this coordinator manages our device
+                    if device_id in coordinator.device_ids:
+                        await coordinator.async_refresh_device(device_id)
+                        break
+            
+            _LOGGER.info("Schedule operation completed successfully for %s", entity_id)
+        except HomeAssistantError:
+            # Re-raise validation errors as-is
+            raise
         except EnviApiError as e:
-            _LOGGER.error("Failed to set schedule for %s: %s", entity_id, e, exc_info=True)
+            _LOGGER.error("API error setting schedule for %s: %s", entity_id, e, exc_info=True)
             raise HomeAssistantError(f"Failed to set schedule: {e}") from e
         except Exception as e:
-            _LOGGER.error("Failed to set schedule for %s: %s", entity_id, e, exc_info=True)
+            _LOGGER.error("Unexpected error setting schedule for %s: %s", entity_id, e, exc_info=True)
             raise HomeAssistantError(f"Failed to set schedule: {str(e)}") from e
 
     async def get_heater_status(call: ServiceCall) -> dict:
