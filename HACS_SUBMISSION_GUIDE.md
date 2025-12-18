@@ -106,3 +106,4 @@ Once approved:
 - HACS Default Repository: https://github.com/hacs/default
 - Home Assistant Brands: https://github.com/home-assistant/brands
 
+

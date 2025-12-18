@@ -4,18 +4,7 @@
 
 A comprehensive Home Assistant integration for Envi Smart Heaters (manufactured by [EHEAT, Inc.](https://www.eheat.com/)) with enhanced reliability, error handling, and advanced features.
 
-## 🚀 What's New in v15.0
-
-### Major Improvements
-- **DataUpdateCoordinator**: Centralized data management with parallel device updates
-- **Sensor Platform**: 10 diagnostic sensors per device (signal strength, firmware, mode, schedule info, etc.)
-- **Binary Sensor Platform**: 5 binary sensors per device (freeze protect, child lock, schedule active, hold, online)
-- **Enhanced API Client**: Better error handling, token management, and retry logic
-- **Temperature Conversion**: Automatic Celsius/Fahrenheit conversion support
-- **Improved Entity Management**: Proper device information and availability tracking
-- **Custom Services**: Advanced functionality for scheduling and status monitoring
-- **Better Error Recovery**: Graceful degradation and detailed error reporting
-- **Production Ready**: Comprehensive logging and monitoring
+## 🚀 Features
 
 ### Key Features
 
@@ -302,27 +291,17 @@ Use at your own risk. The developers are not responsible for any issues that may
 - **Current Maintainer**: [@rendershome](https://github.com/rendershome) - Enhanced with DataUpdateCoordinator, sensor platform, binary sensor platform, and improved error handling
 - **Manufacturer**: [EHEAT, Inc.](https://www.eheat.com/) - Envi Smart Heaters
 
-## 📝 Changelog
+## 📝 Version History
 
-### v15.0
-- **DataUpdateCoordinator**: Implemented centralized data management
-- **Sensor Platform**: Added 10 diagnostic sensors per device
-- **Binary Sensor Platform**: Added 5 binary sensors per device
-- **Temperature Conversion**: Automatic C/F conversion support
-- **Enhanced Services**: Improved service implementations with coordinator support
-- **Better Error Handling**: Detailed error messages and graceful degradation
-- **Performance**: Parallel device updates for better efficiency
-- **Device Info**: Enhanced device information with location support
+### v2.0.0 (Current)
+- **First Official Release**: Production-ready integration
+- **Complete Feature Set**: All features consolidated from pre-release phase
+- See [RELEASE_NOTES_v2.0.0.md](../../RELEASE_NOTES_v2.0.0.md) for full details
 
-### v1.0.0
-- Complete rewrite with enhanced reliability
-- Added custom services
-- Improved error handling
-- Better device integration
-- Production-ready logging
-- JWT auth added
+### Pre-Release Phase (v15.*)
+All v15.* versions were pre-releases for testing and development. These have been consolidated into v2.0.0.
 
-### v0.10.0
-- Initial release
-- Basic climate control
-- Simple API integration
+### Original Fork (v0.10.0, v1.0.0)
+- **Original Author**: [@wlatic](https://github.com/wlatic)
+- Initial Envi Heater integration with basic climate control
+- Simple API integration and JWT authentication

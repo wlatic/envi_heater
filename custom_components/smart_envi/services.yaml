@@ -2,3 +2,4 @@
 # Services are registered programmatically in services.py
 # This empty file prevents Home Assistant from trying to load a non-existent file
 
+
