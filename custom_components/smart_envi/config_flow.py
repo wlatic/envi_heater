@@ -78,6 +78,7 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
+        super().__init__()
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
@@ -109,6 +110,17 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
         options = self.config_entry.options or {}
         current_scan_interval = options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
         current_api_timeout = options.get("api_timeout", DEFAULT_API_TIMEOUT)
+        
+        # Ensure values are integers
+        try:
+            current_scan_interval = int(current_scan_interval)
+        except (ValueError, TypeError):
+            current_scan_interval = DEFAULT_SCAN_INTERVAL
+        
+        try:
+            current_api_timeout = int(current_api_timeout)
+        except (ValueError, TypeError):
+            current_api_timeout = DEFAULT_API_TIMEOUT
 
         return self.async_show_form(
             step_id="init",
