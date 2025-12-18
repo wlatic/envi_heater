@@ -88,13 +88,7 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         """Show menu to choose between integration options and schedule editing."""
-        if user_input is not None:
-            if user_input.get("next_step") == "integration":
-                return await self.async_step_integration_options()
-            elif user_input.get("next_step") == "schedule":
-                return await self.async_step_select_device()
-        
-        # Show menu
+        # Show menu - when user selects an option, HA calls the step with that key
         return self.async_show_menu(
             step_id="init",
             menu_options={
@@ -102,6 +96,14 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                 "schedule": "Edit Device Schedule",
             },
         )
+    
+    async def async_step_integration(self, user_input: dict | None = None) -> FlowResult:
+        """Handle integration menu selection - redirect to integration_options."""
+        return await self.async_step_integration_options(user_input)
+    
+    async def async_step_schedule(self, user_input: dict | None = None) -> FlowResult:
+        """Handle schedule menu selection - redirect to select_device."""
+        return await self.async_step_select_device(user_input)
 
     async def async_step_integration_options(self, user_input: dict | None = None) -> FlowResult:
         """Manage integration options (scan interval, API timeout)."""
