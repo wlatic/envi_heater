@@ -70,7 +70,11 @@ class EnviHeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> EnviHeaterOptionsFlowHandler:
         """Get the options flow for this handler."""
-        return EnviHeaterOptionsFlowHandler(config_entry)
+        try:
+            return EnviHeaterOptionsFlowHandler(config_entry)
+        except Exception as err:
+            _LOGGER.exception("Failed to create options flow: %s", err)
+            raise
 
 
 class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
