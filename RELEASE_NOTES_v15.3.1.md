@@ -1,11 +1,17 @@
-# Release v15.3.1 - Timestamp Parsing Fix
+# Release v15.3.1 - Timestamp Parsing Fix & Service Discovery
 
-## 🐛 Critical Bug Fix
+## 🐛 Critical Bug Fixes
 
 ### Fixed Timestamp Sensor Error
 - **Fixed**: `AttributeError: 'str' object has no attribute 'tzinfo'` in `last_update` sensor
 - **Root Cause**: The `last_update` sensor with `SensorDeviceClass.TIMESTAMP` was returning a string instead of a datetime object
 - **Impact**: Sensor was causing errors in Home Assistant logs and not displaying correctly
+
+### Fixed Service Discovery Error
+- **Fixed**: `Failed to load services.yaml for integration: smart_envi`
+- **Root Cause**: Home Assistant was looking for a `services.yaml` file for service discovery
+- **Impact**: Error message in logs (non-critical, services still worked)
+- **Solution**: Added `services.yaml` file with service metadata for proper discovery
 
 ## 🔧 Technical Details
 
@@ -46,9 +52,9 @@ but provides state 2025-12-18 01:07:44:<class 'str'> resulting in
 
 ## 📊 Changes
 
-- **Files Changed**: 1 file (`sensor.py`)
-- **Lines Changed**: +62 insertions, -7 deletions
-- **Impact**: Fixes critical error affecting all users with `last_update` sensors
+- **Files Changed**: 2 files (`sensor.py`, `services.yaml`)
+- **Lines Changed**: +109 insertions, -7 deletions
+- **Impact**: Fixes critical error affecting all users with `last_update` sensors and service discovery warning
 
 ## 🎯 Testing
 
@@ -57,6 +63,8 @@ After updating to v15.3.1:
 2. Check that `last_update` sensors display correctly
 3. Verify no errors in logs related to timestamp parsing
 4. Confirm sensor shows proper datetime values in Home Assistant UI
+5. Verify no "Failed to load services.yaml" errors in logs
+6. Confirm all services are discoverable in Home Assistant Developer Tools → Services
 
 ## 📝 Technical Notes
 
@@ -72,5 +80,7 @@ The fix ensures that:
 
 ---
 
-**Full Changelog**: See commit `ddce0f5` for detailed changes.
+**Full Changelog**: 
+- Commit `ddce0f5`: Fix timestamp parsing for last_update sensor
+- Commit `cb90c1a`: Add services.yaml file for service discovery
 
