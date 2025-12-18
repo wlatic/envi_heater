@@ -7,6 +7,6 @@
   "dependencies": [],
   "codeowners": ["@wlatic"],
   "config_flow": true,
-  "version": "15.2.3",
+  "version": "15.2.4",
   "iot_class": "cloud_poll"
 }
