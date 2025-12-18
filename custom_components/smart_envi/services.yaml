@@ -1,7 +1,0 @@
-# Services for Smart Envi integration
-# Services are registered programmatically in services.py
-# In Home Assistant 2025.12+, services.yaml is optional for programmatic registration
-# This file provides service metadata for discovery
-
-smart_envi:
-
