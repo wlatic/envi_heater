@@ -52,3 +52,16 @@ htmlcov/
 *.bak
 *.swp
 
+# Test scripts (may contain credentials - keep local only)
+test_*.py
+*_test.py
+test_api*.py
+
+# Credentials and sensitive data
+*.env
+.env.*
+secrets.yaml
+secrets.json
+*credentials*
+*password*
+*secret*
