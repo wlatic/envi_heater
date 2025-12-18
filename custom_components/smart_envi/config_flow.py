@@ -12,17 +12,17 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EnviApiClient, EnviAuthenticationError
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_API_TIMEOUT,
+    MIN_SCAN_INTERVAL,
+    MAX_SCAN_INTERVAL,
+    MIN_API_TIMEOUT,
+    MAX_API_TIMEOUT,
+)
 
 _LOGGER = logging.getLogger(__name__)
-
-# Default values
-DEFAULT_SCAN_INTERVAL = 30  # seconds
-DEFAULT_API_TIMEOUT = 15  # seconds
-MIN_SCAN_INTERVAL = 10  # seconds - minimum to avoid API overload
-MAX_SCAN_INTERVAL = 300  # seconds - 5 minutes max
-MIN_API_TIMEOUT = 5  # seconds
-MAX_API_TIMEOUT = 60  # seconds
 
 
 class EnviHeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

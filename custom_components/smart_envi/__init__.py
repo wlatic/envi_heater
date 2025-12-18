@@ -5,6 +5,7 @@ by EHEAT, Inc. or Envi. It uses the Envi API in an unofficial capacity.
 
 Smart Envi heaters manufactured by EHEAT, Inc. (https://www.eheat.com/)
 Originally created by @wlatic (https://github.com/wlatic)
+Currently maintained by @rendershome (https://github.com/rendershome)
 Enhanced with coordinator, sensors, and binary sensors.
 """
 from __future__ import annotations

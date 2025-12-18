@@ -1,4 +1,9 @@
+"""Custom services for Smart Envi integration."""
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
+
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
@@ -8,6 +13,9 @@ from homeassistant.const import ATTR_ENTITY_ID
 
 from .const import DOMAIN
 from .api import EnviApiClient, EnviApiError, EnviDeviceError
+
+if TYPE_CHECKING:
+    from .coordinator import EnviDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,23 +112,28 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         _LOGGER.info("Refresh complete: %s devices refreshed, %s failed", refreshed_count, failed_count)
 
     async def set_heater_schedule(call: ServiceCall) -> None:
-        """Set a schedule for a heater."""
+        """Set a schedule for a Smart Envi heater.
+        
+        Args:
+            call: Service call with entity_id and schedule data
+            
+        Raises:
+            HomeAssistantError: If entity_id is missing, device_id cannot be determined,
+                or API client is unavailable
+        """
         entity_id = call.data.get(ATTR_ENTITY_ID)
         schedule_data = call.data.get("schedule", {})
         
         if not entity_id:
-            _LOGGER.error("No entity ID provided")
-            return
+            raise HomeAssistantError("Entity ID is required")
         
         device_id = _get_device_id_from_entity(hass, entity_id)
         if not device_id:
-            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
-            return
+            raise HomeAssistantError(f"Could not determine device_id for entity {entity_id}")
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Smart Envi API client found")
-            return
+            raise HomeAssistantError("Smart Envi integration not configured or API client unavailable")
         
         try:
             # Get current device data to find schedule_id
@@ -147,23 +160,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.error("Failed to set schedule for %s: %s", entity_id, e, exc_info=True)
             raise HomeAssistantError(f"Failed to set schedule: {str(e)}") from e
 
-    async def get_heater_status(call: ServiceCall) -> dict | None:
-        """Get detailed status of a heater."""
+    async def get_heater_status(call: ServiceCall) -> dict:
+        """Get detailed status of a Smart Envi heater.
+        
+        Args:
+            call: Service call with entity_id
+            
+        Returns:
+            Dictionary containing device status information
+            
+        Raises:
+            HomeAssistantError: If entity_id is missing, device_id cannot be determined,
+                API client is unavailable, or status retrieval fails
+        """
         entity_id = call.data.get(ATTR_ENTITY_ID)
         
         if not entity_id:
-            _LOGGER.error("No entity ID provided")
-            return None
+            raise HomeAssistantError("Entity ID is required")
         
         device_id = _get_device_id_from_entity(hass, entity_id)
         if not device_id:
-            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
-            return None
+            raise HomeAssistantError(f"Could not determine device_id for entity {entity_id}")
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Smart Envi API client found")
-            return None
+            raise HomeAssistantError("Smart Envi integration not configured or API client unavailable")
         
         try:
             # Get full device info
@@ -195,109 +216,160 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 "firmware_version": device_info.get("firmware_version"),
                 "signal_strength": device_info.get("signal_strength"),
             }
+        except EnviApiError as e:
+            _LOGGER.error("API error getting status for %s: %s", entity_id, e, exc_info=True)
+            raise HomeAssistantError(f"Failed to get device status: {e}") from e
         except Exception as e:
             _LOGGER.error("Failed to get status for %s: %s", entity_id, e, exc_info=True)
-            return None
+            raise HomeAssistantError(f"Failed to get device status: {str(e)}") from e
 
     async def test_connection(call: ServiceCall) -> None:
-        """Test connection to Smart Envi API."""
+        """Test connection to Smart Envi API.
+        
+        Args:
+            call: Service call (no parameters required)
+            
+        Raises:
+            HomeAssistantError: If no API clients are found or connection test fails
+        """
         _LOGGER.info("Testing connection to Smart Envi API")
-        for entry_id, client in hass.data[DOMAIN].items():
-            if entry_id == "services_setup":
+        found_client = False
+        for entry_id, client in hass.data.get(DOMAIN, {}).items():
+            if entry_id == "services_setup" or not isinstance(client, EnviApiClient):
                 continue
+            found_client = True
             try:
                 is_connected = await client.test_connection()
                 if is_connected:
                     _LOGGER.info("Connection test successful for entry %s", entry_id)
                 else:
-                    _LOGGER.error("Connection test failed for entry %s", entry_id)
+                    raise HomeAssistantError(f"Connection test failed for entry {entry_id}")
+            except HomeAssistantError:
+                raise
             except Exception as e:
                 _LOGGER.error("Connection test error for entry %s: %s", entry_id, e)
+                raise HomeAssistantError(f"Connection test failed for entry {entry_id}: {str(e)}") from e
+        
+        if not found_client:
+            raise HomeAssistantError("No Smart Envi API clients found. Please configure the integration first.")
 
 
     async def set_freeze_protect(call: ServiceCall) -> None:
-        """Enable or disable freeze protection."""
+        """Enable or disable freeze protection.
+        
+        Note: This setting cannot be changed through the API and must be configured
+        through the Envi mobile app. This service will raise an error if called.
+        
+        Args:
+            call: Service call with entity_id and enabled flag
+            
+        Raises:
+            HomeAssistantError: Always raised with explanation that this setting
+                must be changed via the mobile app
+        """
         entity_id = call.data.get(ATTR_ENTITY_ID)
         enabled = call.data.get("enabled", True)
         
         if not entity_id:
-            _LOGGER.error("No entity ID provided")
-            return
+            raise HomeAssistantError("Entity ID is required")
         
         device_id = _get_device_id_from_entity(hass, entity_id)
         if not device_id:
-            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
-            return
+            raise HomeAssistantError(f"Could not determine device_id for entity {entity_id}")
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Smart Envi API client found")
-            return
+            raise HomeAssistantError("Smart Envi integration not configured or API client unavailable")
         
         try:
             await client.set_freeze_protect(device_id, enabled)
-            _LOGGER.info("Freeze protection %s for %s", "enabled" if enabled else "disabled", entity_id)
         except EnviApiError as e:
-            _LOGGER.error("Failed to set freeze protection: %s", e, exc_info=True)
-            raise HomeAssistantError(f"Failed to set freeze protection: {e}") from e
+            # This will always raise since freeze protect cannot be changed via API
+            raise HomeAssistantError(
+                f"Freeze protection cannot be changed through Home Assistant. "
+                f"Please use the Envi mobile app to modify this setting. "
+                f"Original error: {e}"
+            ) from e
         except Exception as e:
             _LOGGER.error("Failed to set freeze protection: %s", e, exc_info=True)
             raise HomeAssistantError(f"Failed to set freeze protection: {str(e)}") from e
 
     async def set_child_lock(call: ServiceCall) -> None:
-        """Enable or disable child lock."""
+        """Enable or disable child lock.
+        
+        Note: This setting cannot be changed through the API and must be configured
+        through the Envi mobile app. This service will raise an error if called.
+        
+        Args:
+            call: Service call with entity_id and enabled flag
+            
+        Raises:
+            HomeAssistantError: Always raised with explanation that this setting
+                must be changed via the mobile app
+        """
         entity_id = call.data.get(ATTR_ENTITY_ID)
         enabled = call.data.get("enabled", True)
         
         if not entity_id:
-            _LOGGER.error("No entity ID provided")
-            return
+            raise HomeAssistantError("Entity ID is required")
         
         device_id = _get_device_id_from_entity(hass, entity_id)
         if not device_id:
-            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
-            return
+            raise HomeAssistantError(f"Could not determine device_id for entity {entity_id}")
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Smart Envi API client found")
-            return
+            raise HomeAssistantError("Smart Envi integration not configured or API client unavailable")
         
         try:
             await client.set_child_lock(device_id, enabled)
-            _LOGGER.info("Child lock %s for %s", "enabled" if enabled else "disabled", entity_id)
         except EnviApiError as e:
-            _LOGGER.error("Failed to set child lock: %s", e, exc_info=True)
-            raise HomeAssistantError(f"Failed to set child lock: {e}") from e
+            # This will always raise since child lock cannot be changed via API
+            raise HomeAssistantError(
+                f"Child lock cannot be changed through Home Assistant. "
+                f"Please use the Envi mobile app to modify this setting. "
+                f"Original error: {e}"
+            ) from e
         except Exception as e:
             _LOGGER.error("Failed to set child lock: %s", e, exc_info=True)
             raise HomeAssistantError(f"Failed to set child lock: {str(e)}") from e
 
     async def set_hold(call: ServiceCall) -> None:
-        """Set temporary hold (prevents schedule changes)."""
+        """Set temporary hold (prevents schedule changes).
+        
+        Note: This setting cannot be changed through the API and must be configured
+        through the Envi mobile app. This service will raise an error if called.
+        
+        Args:
+            call: Service call with entity_id and enabled flag
+            
+        Raises:
+            HomeAssistantError: Always raised with explanation that this setting
+                must be changed via the mobile app
+        """
         entity_id = call.data.get(ATTR_ENTITY_ID)
         enabled = call.data.get("enabled", True)
         
         if not entity_id:
-            _LOGGER.error("No entity ID provided")
-            return
+            raise HomeAssistantError("Entity ID is required")
         
         device_id = _get_device_id_from_entity(hass, entity_id)
         if not device_id:
-            _LOGGER.error("Could not determine device_id for entity %s", entity_id)
-            return
+            raise HomeAssistantError(f"Could not determine device_id for entity {entity_id}")
         
         client = _get_client_from_domain(hass)
         if not client:
-            _LOGGER.error("No Smart Envi API client found")
-            return
+            raise HomeAssistantError("Smart Envi integration not configured or API client unavailable")
         
         try:
             await client.set_hold(device_id, enabled)
-            _LOGGER.info("Hold %s for %s", "enabled" if enabled else "disabled", entity_id)
         except EnviApiError as e:
-            _LOGGER.error("Failed to set hold: %s", e, exc_info=True)
-            raise HomeAssistantError(f"Failed to set hold: {e}") from e
+            # This will always raise since hold cannot be changed via API
+            raise HomeAssistantError(
+                f"Hold setting cannot be changed through Home Assistant. "
+                f"Please use the Envi mobile app to modify this setting. "
+                f"Original error: {e}"
+            ) from e
         except Exception as e:
             _LOGGER.error("Failed to set hold: %s", e, exc_info=True)
             raise HomeAssistantError(f"Failed to set hold: {str(e)}") from e

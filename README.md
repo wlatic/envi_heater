@@ -112,6 +112,6 @@ Use at your own risk. The developers are not responsible for any issues that may
 ## Credits
 
 - **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
-- Integration enhanced and maintained for the Home Assistant community
+- **Current Maintainer**: [@rendershome](https://github.com/rendershome) - Enhanced and maintained for the Home Assistant community
 - **Manufacturer**: [EHEAT, Inc.](https://www.eheat.com/) - Envi Smart Heaters
 - Uses the Envi API for device communication (unofficial use)

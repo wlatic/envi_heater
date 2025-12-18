@@ -66,6 +66,7 @@ This is an **UNOFFICIAL** integration. This integration is not created, maintain
 ## Credits
 
 - **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
+- **Current Maintainer**: [@rendershome](https://github.com/rendershome) - Enhanced and maintained for the Home Assistant community
 - **Manufacturer**: [EHEAT, Inc.](https://www.eheat.com/) - Envi Smart Heaters
 
 ## Support

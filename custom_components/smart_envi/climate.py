@@ -23,7 +23,19 @@ MODE_MAP = {
 
 
 class EnviHeater(CoordinatorEntity, ClimateEntity):
-    """Representation of a Smart Envi heater using centralized coordinator."""
+    """Representation of a Smart Envi heater using centralized coordinator.
+    
+    This entity provides climate control functionality for Smart Envi heaters,
+    including temperature control and on/off functionality. It uses the
+    DataUpdateCoordinator pattern for efficient data updates.
+    
+    Attributes:
+        _attr_hvac_modes: Available HVAC modes (OFF, HEAT)
+        _attr_supported_features: Supported climate features
+        _attr_temperature_unit: Temperature unit (Fahrenheit)
+        _attr_target_temperature_high: Maximum target temperature (86°F)
+        _attr_target_temperature_low: Minimum target temperature (50°F)
+    """
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:radiator"  # Default icon, will update based on state
@@ -44,8 +56,13 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
         self._update_from_coordinator()
         self.async_write_ha_state()
 
-    def __init__(self, coordinator: EnviDataUpdateCoordinator, device_id: str):
-        """Initialize the heater."""
+    def __init__(self, coordinator: EnviDataUpdateCoordinator, device_id: str) -> None:
+        """Initialize the Smart Envi heater entity.
+        
+        Args:
+            coordinator: DataUpdateCoordinator instance for fetching device data
+            device_id: Unique device identifier from Envi API
+        """
         super().__init__(coordinator)
         self.coordinator = coordinator
         self.client = coordinator.client
@@ -73,7 +90,12 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
         self._update_from_coordinator()
 
     def _update_from_coordinator(self) -> None:
-        """Update entity state from coordinator data."""
+        """Update entity state from coordinator data.
+        
+        This method is called when the coordinator receives new data. It updates
+        all entity attributes including temperature, HVAC mode, and extra state
+        attributes. Handles temperature unit conversion automatically.
+        """
         data = self.coordinator.get_device_data(self.device_id)
         if not data:
             return
@@ -187,14 +209,36 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             )
 
     async def async_set_temperature(self, **kwargs) -> None:
-        """Set new target temperature."""
+        """Set new target temperature.
+        
+        Args:
+            **kwargs: May contain ATTR_TEMPERATURE with the target temperature in Fahrenheit
+            
+        Raises:
+            HomeAssistantError: If temperature is invalid or setting fails
+        """
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
-            return
+            raise HomeAssistantError("Temperature value is required")
+        
+        # Validate temperature range
+        if not isinstance(temperature, (int, float)):
+            raise HomeAssistantError(f"Invalid temperature value: {temperature}")
+        
+        if temperature < MIN_TEMPERATURE or temperature > MAX_TEMPERATURE:
+            raise HomeAssistantError(
+                f"Temperature must be between {MIN_TEMPERATURE}°F and {MAX_TEMPERATURE}°F. "
+                f"Received: {temperature}°F"
+            )
         
         # Convert to device's unit if needed
         if self._temperature_unit_api == "C":
             temp_to_send = self.client.convert_temperature(temperature, "F", "C")
+            # Validate converted temperature is within reasonable range (10-30°C)
+            if temp_to_send < 10 or temp_to_send > 30:
+                _LOGGER.warning(
+                    "Converted temperature %s°C is outside typical range (10-30°C)", temp_to_send
+                )
         else:
             temp_to_send = temperature
             
@@ -217,7 +261,14 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             raise HomeAssistantError(f"Failed to set temperature: {str(e)}") from e
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set HVAC mode."""
+        """Set HVAC mode (on/off).
+        
+        Args:
+            hvac_mode: HVAC mode to set (HVACMode.HEAT or HVACMode.OFF)
+            
+        Raises:
+            HomeAssistantError: If setting the mode fails
+        """
         try:
             if hvac_mode == HVACMode.HEAT:
                 _LOGGER.debug("Turning on heater %s", self.device_id)

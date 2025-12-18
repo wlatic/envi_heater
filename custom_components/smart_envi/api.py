@@ -8,14 +8,17 @@ from datetime import datetime, timedelta, timezone
 import aiohttp
 from aiohttp import ClientError, ClientTimeout
 
-from .const import BASE_URL, ENDPOINTS
+from .const import (
+    BASE_URL,
+    ENDPOINTS,
+    MAX_RETRIES,
+    INITIAL_RETRY_DELAY,
+    MAX_RETRY_DELAY,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 # Retry configuration
-MAX_RETRIES = 3
-INITIAL_RETRY_DELAY = 1  # seconds
-MAX_RETRY_DELAY = 30  # seconds
 RETRYABLE_STATUS_CODES = (429, 500, 502, 503, 504)  # Rate limit and server errors
 RETRYABLE_EXCEPTIONS = (aiohttp.ClientError, asyncio.TimeoutError)
 
@@ -61,7 +64,16 @@ class EnviApiClient:
         self.timeout = ClientTimeout(total=api_timeout)
 
     async def authenticate(self) -> None:
-        """Log in to Envi with a fresh unique device_id."""
+        """Authenticate with the Envi API and obtain an access token.
+        
+        Creates a unique device_id for each authentication attempt to avoid
+        conflicts. The token expiration is parsed from the JWT token if available,
+        otherwise defaults to 365 days.
+        
+        Raises:
+            EnviAuthenticationError: If authentication fails (invalid credentials,
+                network error, or API rejection)
+        """
         fresh_device_id = f"ha_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
         payload = {
             "username": self.username,
@@ -297,12 +309,36 @@ class EnviApiClient:
         return await self._request("PATCH", endpoint, json=payload)
 
     async def set_temperature(self, device_id: str, temperature: float) -> dict:
-        """Set target temperature for a device."""
+        """Set target temperature for a device.
+        
+        Args:
+            device_id: Device identifier
+            temperature: Target temperature in the device's configured unit
+            
+        Returns:
+            API response dictionary
+            
+        Raises:
+            EnviApiError: If the API request fails
+            EnviDeviceError: If device-specific error occurs
+        """
         endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
         return await self._request("PATCH", endpoint, json={"temperature": temperature})
 
     async def set_state(self, device_id: str, state: int) -> dict:
-        """Set device state (1 = on, 0 = off)."""
+        """Set device state (on/off).
+        
+        Args:
+            device_id: Device identifier
+            state: Device state (1 = on, 0 = off)
+            
+        Returns:
+            API response dictionary
+            
+        Raises:
+            EnviApiError: If the API request fails
+            EnviDeviceError: If device-specific error occurs
+        """
         endpoint = ENDPOINTS["device_update"].format(device_id=device_id)
         return await self._request("PATCH", endpoint, json={"state": state})
 
@@ -472,13 +508,40 @@ class EnviApiClient:
         return await self.get_device_state(device_id)
 
     def convert_temperature(self, temperature: float, from_unit: str, to_unit: str) -> float:
-        """Convert temperature between Celsius and Fahrenheit."""
-        if from_unit == to_unit:
+        """Convert temperature between Celsius and Fahrenheit.
+        
+        Args:
+            temperature: Temperature value to convert
+            from_unit: Source unit ("C" or "F")
+            to_unit: Target unit ("C" or "F")
+            
+        Returns:
+            Converted temperature value
+            
+        Raises:
+            ValueError: If from_unit or to_unit is not "C" or "F"
+        """
+        # Validate and normalize unit strings
+        from_unit_upper = from_unit.upper().strip()
+        to_unit_upper = to_unit.upper().strip()
+        
+        valid_units = {"C", "F"}
+        if from_unit_upper not in valid_units:
+            raise ValueError(f"Invalid source unit '{from_unit}'. Must be 'C' or 'F'")
+        if to_unit_upper not in valid_units:
+            raise ValueError(f"Invalid target unit '{to_unit}'. Must be 'C' or 'F'")
+        
+        # No conversion needed
+        if from_unit_upper == to_unit_upper:
             return temperature
-        if from_unit.upper() == "C" and to_unit.upper() == "F":
+        
+        # Perform conversion
+        if from_unit_upper == "C" and to_unit_upper == "F":
             return (temperature * 9/5) + 32
-        elif from_unit.upper() == "F" and to_unit.upper() == "C":
+        elif from_unit_upper == "F" and to_unit_upper == "C":
             return (temperature - 32) * 5/9
+        
+        # Should never reach here due to validation above
         return temperature
 
     async def test_connection(self) -> bool:

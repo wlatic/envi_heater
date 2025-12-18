@@ -251,7 +251,7 @@ Use at your own risk. The developers are not responsible for any issues that may
 ## 🙏 Credits
 
 - **Original Author**: [@wlatic](https://github.com/wlatic) - Initial Envi Heater integration
-- Enhanced with DataUpdateCoordinator, sensor platform, binary sensor platform, and improved error handling
+- **Current Maintainer**: [@rendershome](https://github.com/rendershome) - Enhanced with DataUpdateCoordinator, sensor platform, binary sensor platform, and improved error handling
 - **Manufacturer**: [EHEAT, Inc.](https://www.eheat.com/) - Envi Smart Heaters
 
 ## 📝 Changelog
