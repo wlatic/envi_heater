@@ -408,15 +408,70 @@ class EnviLastUpdateSensor(EnviSensor):
             # Use device_status_res_at if available, otherwise device_status_req_at
             last_update = data.get("device_status_res_at") or data.get("device_status_req_at")
             if last_update:
-                # Parse ISO timestamp and format it
-                from datetime import datetime
+                # Parse timestamp - must return datetime object for TIMESTAMP device class
+                from datetime import datetime, timezone
+                
+                dt = None
+                timestamp_str = str(last_update).strip()
+                
+                # Try multiple parsing strategies
                 try:
-                    dt = datetime.fromisoformat(last_update.replace("Z", "+00:00"))
-                    self._attr_native_value = dt.strftime("%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    self._attr_native_value = last_update
+                    # Try ISO format first (with or without Z)
+                    if "Z" in timestamp_str:
+                        dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                    elif "+" in timestamp_str or (timestamp_str.count("-") >= 3 and "T" in timestamp_str):
+                        # Has timezone info (ISO format with timezone) or ISO format with T separator
+                        dt = datetime.fromisoformat(timestamp_str)
+                    else:
+                        # Try common formats: "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DDTHH:MM:SS"
+                        # This handles the format seen in the error: "2025-12-18 01:07:44"
+                        for fmt in [
+                            "%Y-%m-%d %H:%M:%S",
+                            "%Y-%m-%dT%H:%M:%S",
+                            "%Y-%m-%d %H:%M:%S.%f",
+                            "%Y-%m-%dT%H:%M:%S.%f",
+                        ]:
+                            try:
+                                dt = datetime.strptime(timestamp_str, fmt)
+                                # Assume UTC if no timezone info
+                                dt = dt.replace(tzinfo=timezone.utc)
+                                break
+                            except ValueError:
+                                continue
+                    
+                    if dt is None:
+                        raise ValueError(f"Could not parse timestamp: {timestamp_str}")
+                    
+                    # Ensure timezone-aware datetime
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    
+                    # CRITICAL: For TIMESTAMP device class, Home Assistant expects a datetime object, not a string
+                    # Double-check we're setting a datetime object, not a string
+                    if not isinstance(dt, datetime):
+                        raise TypeError(f"Expected datetime object, got {type(dt)}")
+                    
+                    self._attr_native_value = dt
+                    _LOGGER.debug(
+                        "Parsed timestamp '%s' to datetime %s for device %s",
+                        timestamp_str,
+                        dt,
+                        self.device_id,
+                    )
+                except (ValueError, TypeError, AttributeError) as e:
+                    # If parsing fails, set to None (not a string) for TIMESTAMP device class
+                    _LOGGER.warning(
+                        "Failed to parse timestamp '%s' (type: %s) for device %s: %s. Setting to None.",
+                        timestamp_str,
+                        type(last_update).__name__,
+                        self.device_id,
+                        e,
+                    )
+                    # CRITICAL: Must set None, not a string, for TIMESTAMP device class
+                    self._attr_native_value = None
             else:
-                self._attr_native_value = "Unknown"
+                # No timestamp available - set to None for TIMESTAMP device class
+                self._attr_native_value = None
             self._attr_available = True
         else:
             self._attr_available = False
