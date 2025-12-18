@@ -7,6 +7,6 @@
   "dependencies": [],
   "codeowners": ["@rendershome"],
   "config_flow": true,
-  "version": "15.3.3",
+  "version": "15.3.4",
   "iot_class": "cloud_poll"
 }
