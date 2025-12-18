@@ -1,6 +1,8 @@
 {
   "domain": "smart_envi",
   "name": "Envi Smart Heater",
+  "documentation": "https://github.com/rendershome/smart_envi",
+  "issue_tracker": "https://github.com/rendershome/smart_envi/issues",
   "requirements": ["aiohttp>=3.8.4"],
   "dependencies": [],
   "codeowners": ["@wlatic"],
