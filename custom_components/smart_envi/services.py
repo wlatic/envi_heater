@@ -192,13 +192,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 _LOGGER.info("Creating new schedule for device %s", device_id)
                 payload["device_id"] = device_id
                 _LOGGER.debug("Schedule creation payload: %s", payload)
-                result = await client.create_schedule(payload)
+                await client.create_schedule(payload)
                 _LOGGER.info("New schedule created successfully for device %s", device_id)
             
             # Refresh device data to get updated schedule info
             # Find the coordinator that manages this device
             domain_data = hass.data.get(DOMAIN, {})
-            for entry_id, value in domain_data.items():
+            for entry_id, _ in domain_data.items():
                 if entry_id == "services_setup":
                     continue
                 coordinator_key = f"{DOMAIN}_coordinator_{entry_id}"
@@ -330,19 +330,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             device_info = await client.get_device_full_info(device_id)
             
             # Log detailed status
-            _LOGGER.info("=== Status for %s ===", entity_id)
-            _LOGGER.info("Device ID: %s", device_id)
-            _LOGGER.info("Name: %s", device_info.get("name"))
-            _LOGGER.info("Serial: %s", device_info.get("serial_no"))
-            _LOGGER.info("Model: %s", device_info.get("model_no"))
-            _LOGGER.info("Firmware: %s", device_info.get("firmware_version"))
-            _LOGGER.info("Current Temp: %s°%s", device_info.get("ambient_temperature"), device_info.get("temperature_unit", "F"))
-            _LOGGER.info("Target Temp: %s°%s", device_info.get("current_temperature"), device_info.get("temperature_unit", "F"))
-            _LOGGER.info("State: %s", "ON" if device_info.get("state") == 1 else "OFF")
-            _LOGGER.info("Mode: %s", device_info.get("current_mode"))
-            _LOGGER.info("Schedule Active: %s", device_info.get("is_schedule_active"))
-            _LOGGER.info("Freeze Protect: %s", device_info.get("freeze_protect_setting"))
-            _LOGGER.info("Signal Strength: %s%%", device_info.get("signal_strength"))
+            _LOGGER.info("Retrieved status for %s (device_id: %s)", entity_id, device_id)
+            _LOGGER.debug("=== Status for %s ===", entity_id)
+            _LOGGER.debug("Device ID: %s", device_id)
+            _LOGGER.debug("Name: %s", device_info.get("name"))
+            _LOGGER.debug("Serial: %s", device_info.get("serial_no"))
+            _LOGGER.debug("Model: %s", device_info.get("model_no"))
+            _LOGGER.debug("Firmware: %s", device_info.get("firmware_version"))
+            _LOGGER.debug("Current Temp: %s°%s", device_info.get("ambient_temperature"), device_info.get("temperature_unit", "F"))
+            _LOGGER.debug("Target Temp: %s°%s", device_info.get("current_temperature"), device_info.get("temperature_unit", "F"))
+            _LOGGER.debug("State: %s", "ON" if device_info.get("state") == 1 else "OFF")
+            _LOGGER.debug("Mode: %s", device_info.get("current_mode"))
+            _LOGGER.debug("Schedule Active: %s", device_info.get("is_schedule_active"))
+            _LOGGER.debug("Freeze Protect: %s", device_info.get("freeze_protect_setting"))
+            _LOGGER.debug("Signal Strength: %s%%", device_info.get("signal_strength"))
             
             # Return status as service result (for use in automations)
             return {
@@ -386,8 +387,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             except HomeAssistantError:
                 raise
             except Exception as e:
-                _LOGGER.error("Connection test error for entry %s: %s", entry_id, e)
-                raise HomeAssistantError(f"Connection test failed for entry {entry_id}: {str(e)}") from e
+                _LOGGER.exception("Connection test error for entry %s: %s", entry_id, e)
+                raise HomeAssistantError(f"Connection test failed for entry {entry_id}: {e!s}") from e
         
         if not found_client:
             raise HomeAssistantError("No Smart Envi API clients found. Please configure the integration first.")

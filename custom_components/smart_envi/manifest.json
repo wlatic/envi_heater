@@ -8,5 +8,7 @@
   "codeowners": ["@rendershome"],
   "config_flow": true,
   "version": "2.0.0",
-  "iot_class": "cloud_poll"
+  "iot_class": "cloud_poll",
+  "translations": ["en"],
+  "homeassistant": "2025.12.0"
 }

@@ -37,7 +37,7 @@
    {
      "tag_name": "v2.0.0",
      "name": "Release v2.0.0 - First Official Release",
-     "body": "$(cat RELEASE_NOTES_v2.0.0.md | sed 's/$/\\n/' | tr -d '\n')",
+     "body": $(cat RELEASE_NOTES_v2.0.0.md | jq -Rs .),
      "draft": false,
      "prerelease": false
    }

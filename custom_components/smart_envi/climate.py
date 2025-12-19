@@ -1,4 +1,6 @@
 import logging
+from typing import ClassVar
+
 from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -40,7 +42,7 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
     _attr_has_entity_name = True
     _attr_icon = "mdi:radiator"  # Default icon, will update based on state
     _attr_entity_registry_enabled_default = True
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
+    _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.OFF, HVACMode.HEAT]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.TURN_ON
@@ -187,26 +189,25 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information."""
         model = self._model_no or "Smart Envi"
-        if not model:
-            model = "Smart Envi"
         
         # Build device name with location if available
         device_name = self._attr_name
+        location = None
         data = self.coordinator.get_device_data(self.device_id)
         if data:
             location = data.get("location_name") or data.get("relative_location_name")
-            if location and location not in device_name:
-                device_name = f"{device_name} ({location})"
+        if location and location not in device_name:
+            device_name = f"{device_name} ({location})"
         
-            return DeviceInfo(
-                identifiers={(DOMAIN, str(self.device_id))},
-                name=device_name,
-                manufacturer="EHEAT",
-                model=model,
-                sw_version=self._firmware_version or "Unknown",
-                serial_number=self._serial_no,
-                configuration_url="https://www.eheat.com",
-            )
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self.device_id))},
+            name=device_name,
+            manufacturer="EHEAT",
+            model=model,
+            sw_version=self._firmware_version or "Unknown",
+            serial_number=self._serial_no,
+            configuration_url="https://www.eheat.com",
+        )
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature.
@@ -251,14 +252,14 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             await self.coordinator.async_refresh_device(self.device_id)
             self._update_from_coordinator()
         except EnviDeviceError as e:
-            _LOGGER.error("Device error setting temperature: %s", e)
+            _LOGGER.exception("Device error setting temperature: %s", e)
             raise HomeAssistantError(f"Failed to set temperature: {e}") from e
         except EnviApiError as e:
-            _LOGGER.error("API error setting temperature: %s", e)
+            _LOGGER.exception("API error setting temperature: %s", e)
             raise HomeAssistantError(f"Failed to set temperature: {e}") from e
         except Exception as e:
-            _LOGGER.error("Unexpected error setting temperature: %s", e)
-            raise HomeAssistantError(f"Failed to set temperature: {str(e)}") from e
+            _LOGGER.exception("Unexpected error setting temperature: %s", e)
+            raise HomeAssistantError(f"Failed to set temperature: {e!s}") from e
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode (on/off).
@@ -284,14 +285,14 @@ class EnviHeater(CoordinatorEntity, ClimateEntity):
             await self.coordinator.async_refresh_device(self.device_id)
             self._update_from_coordinator()
         except EnviDeviceError as e:
-            _LOGGER.error("Device error setting HVAC mode: %s", e)
+            _LOGGER.exception("Device error setting HVAC mode: %s", e)
             raise HomeAssistantError(f"Failed to set HVAC mode: {e}") from e
         except EnviApiError as e:
-            _LOGGER.error("API error setting HVAC mode: %s", e)
+            _LOGGER.exception("API error setting HVAC mode: %s", e)
             raise HomeAssistantError(f"Failed to set HVAC mode: {e}") from e
         except Exception as e:
-            _LOGGER.error("Unexpected error setting HVAC mode: %s", e)
-            raise HomeAssistantError(f"Failed to set HVAC mode: {str(e)}") from e
+            _LOGGER.exception("Unexpected error setting HVAC mode: %s", e)
+            raise HomeAssistantError(f"Failed to set HVAC mode: {e!s}") from e
 
 async def async_setup_entry(
     hass: HomeAssistant,

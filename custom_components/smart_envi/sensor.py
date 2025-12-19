@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass, SensorDeviceClass
 from homeassistant.const import UnitOfTemperature
@@ -409,8 +410,6 @@ class EnviLastUpdateSensor(EnviSensor):
             last_update = data.get("device_status_res_at") or data.get("device_status_req_at")
             if last_update:
                 # Parse timestamp - must return datetime object for TIMESTAMP device class
-                from datetime import datetime, timezone
-                
                 dt = None
                 timestamp_str = str(last_update).strip()
                 
@@ -485,37 +484,12 @@ async def async_setup_entry(
     """Set up Envi sensors from a config entry."""
     _LOGGER.debug("Setting up sensors for entry %s", entry.entry_id)
     
-    # Get or create coordinator
+    # Get coordinator (should already be created in __init__.py)
     coordinator_key = f"{DOMAIN}_coordinator_{entry.entry_id}"
-    
-    if coordinator_key not in hass.data.get(DOMAIN, {}):
-        _LOGGER.warning("Coordinator not found, creating it for sensors")
-        if entry.entry_id not in hass.data.get(DOMAIN, {}):
-            _LOGGER.error("Client not found for entry %s", entry.entry_id)
-            return
-        
-        client = hass.data[DOMAIN][entry.entry_id]
-        from .coordinator import EnviDataUpdateCoordinator
-        coordinator = EnviDataUpdateCoordinator(hass, client, entry.entry_id)
-        hass.data.setdefault(DOMAIN, {})[coordinator_key] = coordinator
-        try:
-            await coordinator.async_config_entry_first_refresh()
-        except Exception as e:
-            _LOGGER.error("Failed to refresh coordinator: %s", e, exc_info=True)
-            return
-    else:
-        coordinator = hass.data[DOMAIN][coordinator_key]
-        _LOGGER.debug("Using existing coordinator")
-    
-    # Wait for coordinator to have device data if needed
-    if not coordinator.device_ids:
-        _LOGGER.debug("Coordinator has no device IDs yet, waiting for data...")
-        if not coordinator.data:
-            try:
-                await coordinator.async_refresh()
-            except Exception as e:
-                _LOGGER.error("Failed to refresh coordinator: %s", e, exc_info=True)
-                return
+    coordinator = hass.data.get(DOMAIN, {}).get(coordinator_key)
+    if not coordinator:
+        _LOGGER.error("Coordinator not found for entry %s", entry.entry_id)
+        return
     
     device_ids = coordinator.device_ids
 

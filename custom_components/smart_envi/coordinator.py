@@ -130,10 +130,10 @@ class EnviDataUpdateCoordinator(DataUpdateCoordinator):
             return device_data
 
         except EnviAuthenticationError as err:
-            _LOGGER.error("Authentication failed: %s", err)
+            _LOGGER.exception("Authentication failed: %s", err)
             raise UpdateFailed(f"Authentication failed: {err}") from err
         except EnviApiError as err:
-            _LOGGER.error("API error during update: %s", err)
+            _LOGGER.exception("API error during update: %s", err)
             raise UpdateFailed(f"API error: {err}") from err
         except Exception as err:
             _LOGGER.error("Unexpected error during update: %s", err, exc_info=True)

@@ -88,11 +88,11 @@ class EnviApiClient:
             "Content-Type": "application/json",
             "User-Agent": "HomeAssistant-Envi/1.0",
         }
-        _LOGGER.debug("Envi login attempt – device_id: %s", fresh_device_id)
+        _LOGGER.debug("Envi login attempt - device_id: %s", fresh_device_id)
         try:
             async with self.session.post(url, json=payload, headers=headers, timeout=self.timeout) as resp:
                 resp_text = await resp.text()
-                _LOGGER.debug("Envi login HTTP %s – %.1000s", resp.status, resp_text)
+                _LOGGER.debug("Envi login HTTP %s - %.1000s", resp.status, resp_text)
                 if resp.status != 200:
                     raise EnviAuthenticationError(f"Login failed (HTTP {resp.status})")
                 data = json.loads(resp_text)
@@ -103,7 +103,7 @@ class EnviApiClient:
                 jwt_exp = self._parse_jwt_expiry(self.token)
                 self.token_expires = jwt_exp or (datetime.now(timezone.utc) + timedelta(days=365))
                 _LOGGER.info(
-                    "Envi login successful – token valid until %s",
+                    "Envi login successful - token valid until %s",
                     self.token_expires.strftime("%Y-%m-%d %H:%M"),
                 )
         except Exception as err:
@@ -182,7 +182,7 @@ class EnviApiClient:
                     # Handle authentication errors (always retry once)
                     if resp.status in (401, 403):
                         if attempt == 0:  # Only retry auth errors once
-                            _LOGGER.info("Token expired – refreshing automatically")
+                            _LOGGER.info("Token expired - refreshing automatically")
                             async with self._refresh_lock:
                                 await self.authenticate()
                                 headers["Authorization"] = f"Bearer {self.token}"
@@ -234,8 +234,9 @@ class EnviApiClient:
                     # Validate response structure
                     self._validate_response(data, endpoint)
                     
-                    # Check API-level success status
-                    if data.get("status") != "success" and resp.status not in (200, 201, 204):
+                    # Check API-level success status (some endpoints may not use status field)
+                    api_status = data.get("status")
+                    if api_status is not None and api_status != "success":
                         msg = data.get("msg", "Unknown error")
                         msg_code = data.get("msgCode", "unknown")
                         _LOGGER.warning("API returned error: %s (code: %s)", msg, msg_code)
@@ -458,8 +459,8 @@ class EnviApiClient:
         return device_data.get("night_light_setting", {})
 
     async def set_night_light_setting(
-        self, device_id: str, brightness: int = None, 
-        color: dict = None, auto: bool = None, on: bool = None
+        self, device_id: str, brightness: int | None = None, 
+        color: dict | None = None, auto: bool | None = None, on: bool | None = None
     ) -> dict:
         """Update night light settings."""
         current = await self.get_night_light_setting(device_id)
@@ -479,8 +480,8 @@ class EnviApiClient:
         return device_data.get("pilot_light_setting", {})
 
     async def set_pilot_light_setting(
-        self, device_id: str, brightness: int = None,
-        always_on: bool = None, auto_dim: bool = None, auto_dim_time: int = None
+        self, device_id: str, brightness: int | None = None,
+        always_on: bool | None = None, auto_dim: bool | None = None, auto_dim_time: int | None = None
     ) -> dict:
         """Update pilot light settings."""
         current = await self.get_pilot_light_setting(device_id)
@@ -500,7 +501,7 @@ class EnviApiClient:
         return device_data.get("display_setting", {})
 
     async def set_display_setting(
-        self, device_id: str, display_brightness: dict = None, timeout: dict = None
+        self, device_id: str, display_brightness: dict | None = None, timeout: dict | None = None
     ) -> dict:
         """Update display settings."""
         current = await self.get_display_setting(device_id)
@@ -614,11 +615,8 @@ class EnviApiClient:
         # Perform conversion
         if from_unit_upper == "C" and to_unit_upper == "F":
             return (temperature * 9/5) + 32
-        elif from_unit_upper == "F" and to_unit_upper == "C":
+        else:  # from_unit_upper == "F" and to_unit_upper == "C"
             return (temperature - 32) * 5/9
-        
-        # Should never reach here due to validation above
-        return temperature
 
     async def test_connection(self) -> bool:
         """Test API connection."""

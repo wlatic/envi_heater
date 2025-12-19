@@ -30,7 +30,6 @@ class EnviBinarySensor(CoordinatorEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the binary sensor."""
         super().__init__(coordinator)
-        self.coordinator = coordinator
         self.device_id = str(device_id)
         self.sensor_type = sensor_type
         self._device_name = device_name
@@ -268,38 +267,11 @@ async def async_setup_entry(
     # Get or create coordinator
     coordinator_key = f"{DOMAIN}_coordinator_{entry.entry_id}"
     
-    # Check if coordinator exists (should be created by climate platform)
-    if coordinator_key not in hass.data.get(DOMAIN, {}):
-        _LOGGER.warning("Coordinator not found, creating it for binary sensors")
-        # Coordinator should be created by climate platform first, but create if needed
-        if entry.entry_id not in hass.data.get(DOMAIN, {}):
-            _LOGGER.error("Client not found for entry %s", entry.entry_id)
-            return
-        
-        client = hass.data[DOMAIN][entry.entry_id]
-        from .coordinator import EnviDataUpdateCoordinator
-        coordinator = EnviDataUpdateCoordinator(hass, client, entry.entry_id)
-        hass.data.setdefault(DOMAIN, {})[coordinator_key] = coordinator
-        # Start initial data fetch
-        try:
-            await coordinator.async_config_entry_first_refresh()
-        except Exception as e:
-            _LOGGER.error("Failed to refresh coordinator: %s", e, exc_info=True)
-            return
-    else:
-        coordinator = hass.data[DOMAIN][coordinator_key]
-        _LOGGER.debug("Using existing coordinator")
-    
-    # Wait a moment for coordinator to have device data if it's still loading
-    if not coordinator.device_ids:
-        _LOGGER.debug("Coordinator has no device IDs yet, waiting for data...")
-        # Give coordinator a chance to fetch data
-        if not coordinator.data:
-            try:
-                await coordinator.async_refresh()
-            except Exception as e:
-                _LOGGER.error("Failed to refresh coordinator: %s", e, exc_info=True)
-                return
+    # Get coordinator (should already be created in __init__.py)
+    coordinator = hass.data.get(DOMAIN, {}).get(coordinator_key)
+    if not coordinator:
+        _LOGGER.error("Coordinator not found for entry %s", entry.entry_id)
+        return
     
     device_ids = coordinator.device_ids
 

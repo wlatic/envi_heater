@@ -243,7 +243,7 @@ The integration includes comprehensive error handling:
 
 ### Token Management
 
-- Automatic token refresh before expiration (5 minute buffer)
+- Automatic token refresh before expiration (5-minute buffer)
 - JWT token parsing for accurate expiration tracking
 - Concurrent request protection with asyncio locks
 - Graceful fallback for authentication failures

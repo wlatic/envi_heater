@@ -336,7 +336,7 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                             try:
                                 temp = float(parts[1].strip())
                                 enabled = parts[2].strip().lower() == "true" if len(parts) > 2 else True
-                            except (ValueError, IndexError) as e:
+                            except (ValueError, IndexError):
                                 errors["time_entries"] = f"Invalid format in entry '{entry_str}'. Use: HH:MM:SS,temp,enabled"
                                 continue
                             
@@ -410,13 +410,6 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                     enabled = entry.get("enabled", True)
                     time_parts.append(f"{time_str},{temp},{enabled}")
             time_entries_str = "|".join(time_parts)
-        
-        # Get entity friendly name for display
-        entity_name = self._entity_id or "Unknown"
-        if self._entity_id:
-            state = self.hass.states.get(self._entity_id)
-            if state:
-                entity_name = state.attributes.get("friendly_name", self._entity_id)
         
         return self.async_show_form(
             step_id="edit_schedule",
