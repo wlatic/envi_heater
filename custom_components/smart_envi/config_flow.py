@@ -608,8 +608,12 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                     "times": schedule.get("times", []),
                 }
                 self._device_id = str(schedule.get("device_id", ""))
+            except (EnviApiError, EnviDeviceError) as e:
+                _LOGGER.error("Failed to load schedule %s: %s", self._schedule_id, e)
+                errors["base"] = "failed_to_load_schedule"
+                self._schedule_data = {}
             except Exception as e:
-                _LOGGER.error("Failed to load schedule %s: %s", self._schedule_id, e, exc_info=True)
+                _LOGGER.exception("Unexpected error loading schedule %s", self._schedule_id)
                 errors["base"] = "failed_to_load_schedule"
                 self._schedule_data = {}
         
