@@ -378,7 +378,7 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                         data=self.config_entry.options or {},
                     )
             except Exception as e:
-                _LOGGER.exception("Error saving schedule: %s", e)
+                _LOGGER.exception("Error saving schedule")
                 errors["base"] = "failed_to_save_schedule"
         
         # Build current schedule data for form
@@ -496,10 +496,10 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
             schedule_id = schedule.get("id")
             schedule_name = schedule.get("name") or "Unnamed Schedule"
             device_id = schedule.get("device_id")
-            device_name = device_map.get(str(device_id), f"Device {device_id}")
             enabled_status = "✓" if schedule.get("enabled") else "✗"
             
             if schedule_id:
+                device_name = device_map.get(str(device_id), f"Device {device_id}")
                 schedule_options[str(schedule_id)] = f"{enabled_status} {schedule_name} ({device_name})"
         
         if not schedule_options:
