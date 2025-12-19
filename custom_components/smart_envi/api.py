@@ -101,7 +101,7 @@ class EnviApiClient:
                     raise EnviAuthenticationError(f"Envi rejected login: {msg}")
                 self.token = data["data"]["token"]
                 jwt_exp = self._parse_jwt_expiry(self.token)
-                self.token_expires = jwt_exp or (datetime.now(timezone.utc) + timedelta(days=365))
+                self.token_expires = jwt_exp or (datetime.now(timezone.utc) + timedelta(hours=24))
                 _LOGGER.info(
                     "Envi login successful - token valid until %s",
                     self.token_expires.strftime("%Y-%m-%d %H:%M"),

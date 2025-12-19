@@ -42,17 +42,8 @@ def _get_device_id_from_entity(hass: HomeAssistant, entity_id: str) -> str | Non
     except Exception as e:
         _LOGGER.debug("Failed to get device_id from entity registry: %s", e)
     
-    # Fallback to parsing entity state attributes
-    try:
-        entity = hass.states.get(entity_id)
-        if entity:
-            unique_id = entity.attributes.get("unique_id", "")
-            if unique_id.startswith(f"{DOMAIN}_"):
-                return unique_id.replace(f"{DOMAIN}_", "", 1)
-            return unique_id if unique_id else None
-    except Exception as e:
-        _LOGGER.debug("Failed to get device_id from entity state: %s", e)
-    
+    # Note: unique_id is only available from entity registry, not as a state attribute
+    # No fallback needed as entity registry is the authoritative source
     return None
 
 
@@ -185,7 +176,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 # Update existing schedule
                 _LOGGER.info("Updating schedule %s for device %s", schedule_id, device_id)
                 _LOGGER.debug("Schedule update payload: %s", payload)
-                result = await client.update_schedule(schedule_id, payload)
+                await client.update_schedule(schedule_id, payload)
                 _LOGGER.info("Schedule %s updated successfully for device %s", schedule_id, device_id)
             else:
                 # Create new schedule
@@ -387,7 +378,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             except HomeAssistantError:
                 raise
             except Exception as e:
-                _LOGGER.exception("Connection test error for entry %s: %s", entry_id, e)
+                _LOGGER.exception("Connection test error for entry %s", entry_id)
                 raise HomeAssistantError(f"Connection test failed for entry {entry_id}: {e!s}") from e
         
         if not found_client:

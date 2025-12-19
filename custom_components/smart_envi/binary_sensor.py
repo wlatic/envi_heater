@@ -35,6 +35,29 @@ class EnviBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._device_name = device_name
         self._attr_unique_id = f"{DOMAIN}_{device_id}_{sensor_type}"
         self._attr_name = f"{device_name} {self._get_sensor_name()}"
+    
+    def _parse_inverted_bool(self, value, default_on: bool = True) -> bool:
+        """Parse API boolean values with inverted semantics.
+        
+        API returns True when feature is OFF, False when ON.
+        
+        Args:
+            value: API value (bool, int, str, or None)
+            default_on: Default value if None or unexpected type
+            
+        Returns:
+            Inverted boolean (True = feature ON, False = feature OFF)
+        """
+        if value is None:
+            return default_on
+        if isinstance(value, bool):
+            return not value
+        if isinstance(value, (int, str)):
+            if value in (1, "true", "True", "1"):
+                return False  # API True = OFF
+            if value in (0, "false", "False", "0"):
+                return True   # API False = ON
+        return not bool(value)
 
     def _get_sensor_name(self) -> str:
         """Get human-readable sensor name."""
@@ -91,24 +114,8 @@ class EnviFreezeProtectBinarySensor(EnviBinarySensor):
         data = self.coordinator.get_device_data(self.device_id)
         if data:
             freeze_protect = data.get("freeze_protect_setting")
-            # Handle different possible values: True/False, 1/0, "true"/"false"
-            # Note: Based on user feedback, API may return inverted values
-            # Testing shows: raw=True when actually OFF, raw=False when actually ON
-            # So we need to invert the logic
-            if isinstance(freeze_protect, bool):
-                self._attr_is_on = not freeze_protect  # Invert: True means OFF, False means ON
-            elif isinstance(freeze_protect, (int, str)):
-                # Convert string/int to bool and invert
-                if freeze_protect in (True, 1, "true", "True", "1"):
-                    self._attr_is_on = False  # API True = feature OFF
-                elif freeze_protect in (False, 0, "false", "False", "0", None):
-                    self._attr_is_on = True  # API False = feature ON
-                else:
-                    self._attr_is_on = not bool(freeze_protect)
-            else:
-                # Default to True (ON) if value is None or unexpected type
-                # (assuming None means feature is enabled by default)
-                self._attr_is_on = True
+            # API returns inverted values: True=OFF, False=ON
+            self._attr_is_on = self._parse_inverted_bool(freeze_protect, default_on=True)
             
             _LOGGER.debug(
                 "Freeze protect for %s (%s): raw=%s (type=%s), is_on=%s (inverted)",
@@ -143,25 +150,9 @@ class EnviChildLockBinarySensor(EnviBinarySensor):
         data = self.coordinator.get_device_data(self.device_id)
         if data:
             child_lock = data.get("child_lock_setting")
-            # Handle different possible values: True/False, 1/0, "true"/"false"
-            # Note: Based on user feedback, API may return inverted values
-            # Testing shows: raw=True when actually OFF, raw=False when actually ON
-            # So we need to invert the logic
-            if isinstance(child_lock, bool):
-                self._attr_is_on = not child_lock  # Invert: True means OFF, False means ON
-            elif isinstance(child_lock, (int, str)):
-                # Convert string/int to bool and invert
-                if child_lock in (True, 1, "true", "True", "1"):
-                    self._attr_is_on = False  # API True = feature OFF
-                elif child_lock in (False, 0, "false", "False", "0", None):
-                    self._attr_is_on = True  # API False = feature ON
-                else:
-                    self._attr_is_on = not bool(child_lock)
-            else:
-                # Default to True (ON/locked) if value is None or unexpected type
-                # (assuming None means lock is enabled by default - but this is unlikely)
-                # Actually, if None, probably means unlocked (OFF)
-                self._attr_is_on = False
+            # API returns inverted values: True=OFF, False=ON
+            # Default to False (unlocked) if None
+            self._attr_is_on = self._parse_inverted_bool(child_lock, default_on=False)
             
             _LOGGER.debug(
                 "Child lock for %s (%s): raw=%s (type=%s), is_on=%s (inverted)",

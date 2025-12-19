@@ -85,6 +85,68 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
         self._schedule_data: dict | None = None
         self._device_id: str | None = None
         self._entity_id: str | None = None
+        self._schedule_id: int | None = None
+        self._all_schedules: list[dict] = []
+    
+    def _parse_time_entries(self, time_entries_str: str) -> tuple[list[dict], dict[str, str]]:
+        """Parse time entries string into structured list.
+        
+        Args:
+            time_entries_str: Pipe-delimited string of entries in format "HH:MM:SS,temp,enabled"
+            
+        Returns:
+            Tuple of (parsed_times_list, errors_dict)
+        """
+        times = []
+        errors = {}
+        
+        if not time_entries_str.strip():
+            return times, errors
+        
+        for entry_str in time_entries_str.split("|"):
+            entry_str = entry_str.strip()
+            if not entry_str:
+                continue
+            
+            parts = entry_str.split(",")
+            if len(parts) < 2:
+                errors["time_entries"] = f"Invalid format in entry '{entry_str}'. Use: HH:MM:SS,temp,enabled"
+                continue
+            
+            time_str = parts[0].strip()
+            try:
+                temp = float(parts[1].strip())
+                enabled = parts[2].strip().lower() == "true" if len(parts) > 2 else True
+            except (ValueError, IndexError):
+                errors["time_entries"] = f"Invalid format in entry '{entry_str}'. Use: HH:MM:SS,temp,enabled"
+                continue
+            
+            # Validate time format
+            try:
+                time_parts = time_str.split(":")
+                if len(time_parts) == 2:
+                    time_str = f"{time_str}:00"
+                elif len(time_parts) != 3:
+                    raise ValueError("Invalid time format")
+                # Validate each part is numeric
+                for part in time_str.split(":"):
+                    int(part)
+            except (ValueError, TypeError):
+                errors["time_entries"] = f"Invalid time format: {time_str}. Use HH:MM:SS"
+                continue
+            
+            # Validate temperature
+            if temp < MIN_TEMPERATURE or temp > MAX_TEMPERATURE:
+                errors["time_entries"] = f"Temperature {temp} must be between {MIN_TEMPERATURE} and {MAX_TEMPERATURE}°F"
+                continue
+            
+            times.append({
+                "time": time_str,
+                "temperature": temp,
+                "enabled": enabled,
+            })
+        
+        return times, errors
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         """Show menu to choose between integration options and schedule editing."""
@@ -110,95 +172,58 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
         _LOGGER.debug("Integration options step called, user_input: %s", user_input)
         errors: dict[str, str] = {}
         
+        if user_input is not None:
+            # Validation is handled by vol.Schema with vol.Coerce and vol.Range
+            # If we reach here, input is valid
+            return self.async_create_entry(
+                title="",
+                data={
+                    "scan_interval": user_input["scan_interval"],
+                    "api_timeout": user_input["api_timeout"],
+                },
+            )
+
+        # Get current values from config entry
+        options = self.config_entry.options or {}
+        current_scan_interval = options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+        current_api_timeout = options.get("api_timeout", DEFAULT_API_TIMEOUT)
+        
+        # Ensure values are integers for defaults
         try:
-            if user_input is not None:
-                # Validate scan interval
-                scan_interval = user_input.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-                try:
-                    scan_interval = int(scan_interval)
-                except (ValueError, TypeError):
-                    errors["scan_interval"] = "Scan interval must be a number"
-                
-                if not errors.get("scan_interval"):
-                    if scan_interval < MIN_SCAN_INTERVAL or scan_interval > MAX_SCAN_INTERVAL:
-                        errors["scan_interval"] = f"Scan interval must be between {MIN_SCAN_INTERVAL} and {MAX_SCAN_INTERVAL} seconds"
-                
-                # Validate API timeout
-                api_timeout = user_input.get("api_timeout", DEFAULT_API_TIMEOUT)
-                try:
-                    api_timeout = int(api_timeout)
-                except (ValueError, TypeError):
-                    errors["api_timeout"] = "API timeout must be a number"
-                
-                if not errors.get("api_timeout"):
-                    if api_timeout < MIN_API_TIMEOUT or api_timeout > MAX_API_TIMEOUT:
-                        errors["api_timeout"] = f"API timeout must be between {MIN_API_TIMEOUT} and {MAX_API_TIMEOUT} seconds"
+            current_scan_interval = int(current_scan_interval)
+        except (ValueError, TypeError):
+            current_scan_interval = DEFAULT_SCAN_INTERVAL
+        
+        try:
+            current_api_timeout = int(current_api_timeout)
+        except (ValueError, TypeError):
+            current_api_timeout = DEFAULT_API_TIMEOUT
 
-                if not errors:
-                    # Store options
-                    return self.async_create_entry(
-                        title="",
-                        data={
-                            "scan_interval": scan_interval,
-                            "api_timeout": api_timeout,
-                        },
-                    )
-
-            # Get current values from config entry
-            options = self.config_entry.options or {}
-            current_scan_interval = options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-            current_api_timeout = options.get("api_timeout", DEFAULT_API_TIMEOUT)
-            
-            # Ensure values are integers
-            try:
-                current_scan_interval = int(current_scan_interval)
-            except (ValueError, TypeError):
-                current_scan_interval = DEFAULT_SCAN_INTERVAL
-            
-            try:
-                current_api_timeout = int(current_api_timeout)
-            except (ValueError, TypeError):
-                current_api_timeout = DEFAULT_API_TIMEOUT
-
-            return self.async_show_form(
-                step_id="integration_options",
-                data_schema=vol.Schema(
-                    {
-                        vol.Required(
-                            "scan_interval",
-                            default=current_scan_interval,
-                        ): vol.All(
-                            vol.Coerce(int),
-                            vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-                        ),
-                        vol.Required(
-                            "api_timeout",
-                            default=current_api_timeout,
-                        ): vol.All(
-                            vol.Coerce(int),
-                            vol.Range(min=MIN_API_TIMEOUT, max=MAX_API_TIMEOUT),
-                        ),
-                    }
-                ),
-                errors=errors,
-            )
-        except Exception as err:
-            _LOGGER.exception("Error in integration options flow: %s", err)
-            errors["base"] = "unknown"
-            return self.async_show_form(
-                step_id="integration_options",
-                data_schema=vol.Schema({
-                    vol.Required("scan_interval", default=DEFAULT_SCAN_INTERVAL): vol.All(
-                        vol.Coerce(int),
-                        vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-                    ),
-                    vol.Required("api_timeout", default=DEFAULT_API_TIMEOUT): vol.All(
-                        vol.Coerce(int),
-                        vol.Range(min=MIN_API_TIMEOUT, max=MAX_API_TIMEOUT),
-                    ),
-                }),
-                errors=errors,
-            )
+        # Build schema once
+        data_schema = vol.Schema({
+            vol.Required(
+                "scan_interval",
+                default=current_scan_interval,
+                description=" \n\nHow often to check for device updates. Default: 30 seconds. Range: 10-300 seconds. Lower values = more frequent updates but higher API usage. Higher values = less API usage but slower response.",
+            ): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
+            ),
+            vol.Required(
+                "api_timeout",
+                default=current_api_timeout,
+                description=" \n\nMaximum time to wait for API responses. Default: 15 seconds. Range: 5-60 seconds. Increase for slow internet, decrease for faster failure detection.",
+            ): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=MIN_API_TIMEOUT, max=MAX_API_TIMEOUT),
+            ),
+        })
+        
+        return self.async_show_form(
+            step_id="integration_options",
+            data_schema=data_schema,
+            errors=errors,
+        )
 
     async def async_step_select_device(self, user_input: dict | None = None) -> FlowResult:
         """Select device to edit schedule."""
@@ -222,12 +247,14 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                 else:
                     errors["base"] = "entity_not_found"
         
-        # Get all Smart Envi climate entities
+        # Get Smart Envi climate entities for this config entry
         registry = entity_registry.async_get(self.hass)
         climate_entities = []
         
-        for entity_id, entry in registry.entities.items():
-            if entry.domain == "climate" and entry.platform == DOMAIN:
+        # Use async_entries_for_config_entry for better performance
+        for entry in entity_registry.async_entries_for_config_entry(registry, self.config_entry.entry_id):
+            if entry.domain == "climate":
+                entity_id = entry.entity_id
                 state = self.hass.states.get(entity_id)
                 if state:
                     friendly_name = state.attributes.get("friendly_name", entity_id)
@@ -321,49 +348,9 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                 
                 # Parse time entries from structured text input
                 # Format: "HH:MM:SS,temp,enabled|HH:MM:SS,temp,enabled"
-                times = []
                 time_entries_str = user_input.get("time_entries", "").strip()
-                
-                if time_entries_str:
-                    for entry_str in time_entries_str.split("|"):
-                        entry_str = entry_str.strip()
-                        if not entry_str:
-                            continue
-                        
-                        parts = entry_str.split(",")
-                        if len(parts) >= 2:
-                            time_str = parts[0].strip()
-                            try:
-                                temp = float(parts[1].strip())
-                                enabled = parts[2].strip().lower() == "true" if len(parts) > 2 else True
-                            except (ValueError, IndexError):
-                                errors["time_entries"] = f"Invalid format in entry '{entry_str}'. Use: HH:MM:SS,temp,enabled"
-                                continue
-                            
-                            # Validate time format
-                            try:
-                                time_parts = time_str.split(":")
-                                if len(time_parts) == 2:
-                                    time_str = f"{time_str}:00"
-                                elif len(time_parts) != 3:
-                                    raise ValueError("Invalid time format")
-                                # Validate each part is numeric
-                                for part in time_str.split(":"):
-                                    int(part)
-                            except (ValueError, TypeError):
-                                errors["time_entries"] = f"Invalid time format: {time_str}. Use HH:MM:SS"
-                                continue
-                            
-                            # Validate temperature
-                            if temp < MIN_TEMPERATURE or temp > MAX_TEMPERATURE:
-                                errors["time_entries"] = f"Temperature {temp} must be between {MIN_TEMPERATURE} and {MAX_TEMPERATURE}°F"
-                                continue
-                            
-                            times.append({
-                                "time": time_str,
-                                "temperature": temp,
-                                "enabled": enabled,
-                            })
+                times, parse_errors = self._parse_time_entries(time_entries_str)
+                errors.update(parse_errors)
                 
                 if not errors:
                     schedule_data["times"] = times
@@ -398,6 +385,13 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
         current_schedule = self._schedule_data or {}
         current_times = current_schedule.get("times", [])
         
+        # Normalize enabled field for form default
+        enabled_value = current_schedule.get("enabled", False)
+        if isinstance(enabled_value, str):
+            enabled_value = enabled_value.lower() in ("true", "1", "yes", "on")
+        elif isinstance(enabled_value, int):
+            enabled_value = bool(enabled_value)
+        
         # Format time entries as string for text input
         # Format: "HH:MM:SS,temp,enabled|HH:MM:SS,temp,enabled"
         time_entries_str = ""
@@ -408,8 +402,214 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                     time_str = entry.get("time", "")
                     temp = entry.get("temperature", "")
                     enabled = entry.get("enabled", True)
+                    # Normalize enabled for display
+                    if isinstance(enabled, str):
+                        enabled = enabled.lower() in ("true", "1", "yes", "on")
+                    elif isinstance(enabled, int):
+                        enabled = bool(enabled)
+                    if time_str and temp:
+                        time_parts.append(f"{time_str},{temp},{str(enabled).lower()}")
+            time_entries_str = "|".join(time_parts)
+        
+        _LOGGER.debug("Form defaults: enabled=%s, name=%s, time_entries=%s", 
+                     enabled_value, current_schedule.get("name", ""), time_entries_str)
+        
+        return self.async_show_form(
+            step_id="edit_schedule",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "enabled",
+                    default=enabled_value,
+                    description=" \n\nTurn the schedule on or off. When disabled, the schedule will not run.",
+                ): bool,
+                vol.Optional(
+                    "name",
+                    default=current_schedule.get("name", ""),
+                    description=" \n\nOptional name for this schedule (e.g., 'Weekday Schedule', 'Weekend Schedule').",
+                ): str,
+                vol.Optional(
+                    "time_entries",
+                    default=time_entries_str,
+                    description=" \n\nFormat: HH:MM:SS,temperature,enabled. Separate multiple entries with | (pipe). Temperature: 50-86°F. Example: 08:00:00,72,true|18:00:00,68,true",
+                ): str,
+            }),
+            errors=errors,
+        )
+    
+    async def async_step_list_schedules(self, user_input: dict | None = None) -> FlowResult:
+        """List all schedules from the API."""
+        errors: dict[str, str] = {}
+        
+        # Get API client
+        domain_data = self.hass.data.get(DOMAIN, {})
+        client = domain_data.get(self.config_entry.entry_id)
+        
+        if not client:
+            errors["base"] = "api_client_unavailable"
+            return self.async_show_form(
+                step_id="list_schedules",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )
+        
+        # Fetch all schedules
+        if not self._all_schedules:
+            try:
+                self._all_schedules = await client.get_schedule_list()
+                _LOGGER.debug("Fetched %s schedules", len(self._all_schedules))
+            except Exception as e:
+                _LOGGER.error("Failed to fetch schedules: %s", e, exc_info=True)
+                errors["base"] = "failed_to_load_schedules"
+                self._all_schedules = []
+        
+        # If user selected a schedule, go to view/edit
+        if user_input is not None:
+            schedule_id_str = user_input.get("schedule_id")
+            if schedule_id_str:
+                try:
+                    self._schedule_id = int(schedule_id_str)
+                    return await self.async_step_view_schedule()
+                except (ValueError, TypeError):
+                    errors["schedule_id"] = "Invalid schedule selection"
+        
+        # Build schedule options for dropdown
+        # Format: "Schedule Name (Device) - ID: 123"
+        schedule_options = {}
+        device_map = {}  # Map device_id to entity name
+        
+        # Get device names from entity registry for this config entry
+        registry = entity_registry.async_get(self.hass)
+        for entry in entity_registry.async_entries_for_config_entry(registry, self.config_entry.entry_id):
+            if entry.domain == "climate":
+                entity_id = entry.entity_id
+                unique_id = entry.unique_id
+                if unique_id.startswith(f"{DOMAIN}_"):
+                    device_id = unique_id.replace(f"{DOMAIN}_", "", 1)
+                    state = self.hass.states.get(entity_id)
+                    if state:
+                        friendly_name = state.attributes.get("friendly_name", entity_id)
+                        device_map[device_id] = friendly_name
+        
+        for schedule in self._all_schedules:
+            if not isinstance(schedule, dict):
+                continue
+            schedule_id = schedule.get("id")
+            schedule_name = schedule.get("name") or "Unnamed Schedule"
+            device_id = schedule.get("device_id")
+            device_name = device_map.get(str(device_id), f"Device {device_id}")
+            enabled_status = "✓" if schedule.get("enabled") else "✗"
+            
+            if schedule_id:
+                schedule_options[str(schedule_id)] = f"{enabled_status} {schedule_name} ({device_name})"
+        
+        if not schedule_options:
+            return self.async_abort(reason="no_schedules")
+        
+        return self.async_show_form(
+            step_id="list_schedules",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "schedule_id",
+                    description=" \n\nSelect a schedule to view or edit. Schedules show enabled (✓) or disabled (✗) status.",
+                ): vol.In(schedule_options),
+            }),
+            errors=errors,
+        )
+    
+    async def async_step_view_schedule(self, user_input: dict | None = None) -> FlowResult:
+        """View and edit a specific schedule."""
+        errors: dict[str, str] = {}
+        
+        if not self._schedule_id:
+            return self.async_abort(reason="no_schedule_selected")
+        
+        # Get API client
+        domain_data = self.hass.data.get(DOMAIN, {})
+        client = domain_data.get(self.config_entry.entry_id)
+        
+        if not client:
+            errors["base"] = "api_client_unavailable"
+            return self.async_show_form(
+                step_id="view_schedule",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )
+        
+        # Load schedule data if not already loaded
+        if self._schedule_data is None:
+            try:
+                schedule = await client.get_schedule(self._schedule_id)
+                self._schedule_data = {
+                    "schedule_id": schedule.get("id"),
+                    "device_id": schedule.get("device_id"),
+                    "enabled": schedule.get("enabled", False),
+                    "name": schedule.get("name") or "",
+                    "temperature": schedule.get("temperature"),
+                    "times": schedule.get("times", []),
+                }
+                self._device_id = str(schedule.get("device_id", ""))
+            except Exception as e:
+                _LOGGER.error("Failed to load schedule %s: %s", self._schedule_id, e, exc_info=True)
+                errors["base"] = "failed_to_load_schedule"
+                self._schedule_data = {}
+        
+        # Handle user input (save or delete)
+        if user_input is not None:
+            action = user_input.get("action")
+            
+            if action == "delete":
+                # Delete schedule
+                try:
+                    await client.delete_schedule(self._schedule_id)
+                    _LOGGER.info("Deleted schedule %s", self._schedule_id)
+                    # Refresh coordinator
+                    coordinator_key = f"{DOMAIN}_coordinator_{self.config_entry.entry_id}"
+                    coordinator = domain_data.get(coordinator_key)
+                    if coordinator:
+                        await coordinator.async_refresh()
+                    return self.async_create_entry(
+                        title="",
+                        data=self.config_entry.options or {},
+                    )
+                except Exception as e:
+                    _LOGGER.error("Failed to delete schedule: %s", e, exc_info=True)
+                    errors["base"] = "failed_to_delete_schedule"
+            
+            elif action == "edit":
+                # Go to edit form
+                return await self.async_step_edit_schedule_from_list()
+        
+        # Display schedule details
+        current_schedule = self._schedule_data or {}
+        current_times = current_schedule.get("times", [])
+        
+        # Format time entries for display
+        time_entries_str = ""
+        if current_times:
+            time_parts = []
+            for entry in current_times:
+                if isinstance(entry, dict):
+                    time_str = entry.get("time", "")
+                    temp = entry.get("temperature", "")
+                    enabled = entry.get("enabled", True)
                     time_parts.append(f"{time_str},{temp},{enabled}")
             time_entries_str = "|".join(time_parts)
+        
+        # Get device name from entity registry for this config entry
+        device_name = "Unknown Device"
+        if self._device_id:
+            registry = entity_registry.async_get(self.hass)
+            for entry in entity_registry.async_entries_for_config_entry(registry, self.config_entry.entry_id):
+                if entry.domain == "climate":
+                    unique_id = entry.unique_id
+                    if unique_id.startswith(f"{DOMAIN}_"):
+                        device_id = unique_id.replace(f"{DOMAIN}_", "", 1)
+                        if device_id == self._device_id:
+                            entity_id = entry.entity_id
+                            state = self.hass.states.get(entity_id)
+                            if state:
+                                device_name = state.attributes.get("friendly_name", entity_id)
+                            break
         
         return self.async_show_form(
             step_id="edit_schedule",
@@ -429,3 +629,48 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
             }),
             errors=errors,
         )
+    
+    async def async_step_edit_schedule_from_list(self, user_input: dict | None = None) -> FlowResult:
+        """Edit schedule from the schedule list (reuses edit_schedule logic)."""
+        # Use the same edit logic as device-based editing
+        # Just ensure we have the schedule_id set
+        if self._schedule_id and not self._schedule_data:
+            # Load schedule data
+            domain_data = self.hass.data.get(DOMAIN, {})
+            client = domain_data.get(self.config_entry.entry_id)
+            if client:
+                try:
+                    schedule = await client.get_schedule(self._schedule_id)
+                    _LOGGER.debug("Loaded schedule data: %s", schedule)
+                    
+                    # Normalize enabled field (handle 0/1, "true"/"false", boolean)
+                    enabled = schedule.get("enabled", False)
+                    if isinstance(enabled, str):
+                        enabled = enabled.lower() in ("true", "1", "yes", "on")
+                    elif isinstance(enabled, int):
+                        enabled = bool(enabled)
+                    
+                    # Get times - handle various formats
+                    times = schedule.get("times", [])
+                    if not times:
+                        times = schedule.get("time_entries", [])
+                    if not isinstance(times, list):
+                        times = []
+                    
+                    self._schedule_data = {
+                        "schedule_id": schedule.get("id"),
+                        "device_id": schedule.get("device_id"),
+                        "enabled": enabled,
+                        "name": schedule.get("name") or schedule.get("title") or "",
+                        "temperature": schedule.get("temperature"),
+                        "times": times,
+                    }
+                    self._device_id = str(schedule.get("device_id", ""))
+                    _LOGGER.debug("Processed schedule data: enabled=%s, name=%s, times_count=%s", 
+                                 enabled, self._schedule_data.get("name"), len(times))
+                except Exception as e:
+                    _LOGGER.error("Failed to load schedule: %s", e, exc_info=True)
+                    self._schedule_data = {}
+        
+        # Reuse the existing edit_schedule method logic
+        return await self.async_step_edit_schedule(user_input)
