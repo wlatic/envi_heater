@@ -13,7 +13,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import entity_registry
 from homeassistant.exceptions import HomeAssistantError
 
-from .api import EnviApiClient, EnviAuthenticationError
+from .api import EnviApiClient, EnviAuthenticationError, EnviApiError, EnviDeviceError, EnviApiError, EnviDeviceError
 from .const import (
     DOMAIN,
     DEFAULT_SCAN_INTERVAL,
@@ -88,6 +88,47 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
         self._schedule_id: int | None = None
         self._all_schedules: list[dict] = []
     
+    def _format_time_entries_for_display(self, times: list[dict]) -> str:
+        """Format time entries list into display string.
+        
+        Args:
+            times: List of time entry dicts with keys: time, temperature, enabled
+            
+        Returns:
+            Pipe-delimited string in format "HH:MM:SS,temp,enabled|HH:MM:SS,temp,enabled"
+        """
+        time_parts = []
+        for entry in times:
+            if isinstance(entry, dict):
+                # Try multiple possible field names
+                time_str = entry.get("time") or entry.get("trigger_time") or ""
+                temp = entry.get("temperature") or entry.get("temp") or ""
+                enabled = entry.get("enabled", True)
+                
+                # Normalize enabled for display
+                if isinstance(enabled, str):
+                    enabled = enabled.lower() in ("true", "1", "yes", "on")
+                elif isinstance(enabled, int):
+                    enabled = bool(enabled)
+                
+                # Ensure time_str is in HH:MM:SS format (add seconds if missing)
+                if time_str and ":" in time_str:
+                    time_parts_split = time_str.split(":")
+                    if len(time_parts_split) == 2:
+                        time_str = f"{time_str}:00"
+                
+                # Only add if we have both time and temperature
+                if time_str and temp:
+                    try:
+                        # Validate temperature is numeric
+                        float(temp)
+                        time_parts.append(f"{time_str},{temp},{str(enabled).lower()}")
+                    except (ValueError, TypeError):
+                        _LOGGER.warning("Skipping invalid time entry: time=%s, temp=%s", time_str, temp)
+        
+        return "|".join(time_parts)
+    
+>>>>>>> c02d638 (Fix CodeRabbit review issues: Extract formatting, fix exceptions, coordinator check)
     def _parse_time_entries(self, time_entries_str: str) -> tuple[list[dict], dict[str, str]]:
         """Parse time entries string into structured list.
         
@@ -317,6 +358,7 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                 # Try to get full schedule details if schedule_id exists
                 if schedule_id:
                     try:
+<<<<<<< HEAD
                         schedule_list = await client.get_schedule_list()
                         for schedule in schedule_list:
                             if isinstance(schedule, dict) and schedule.get("id") == schedule_id:
@@ -329,8 +371,39 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                                 break
                     except Exception as e:
                         _LOGGER.debug("Could not fetch full schedule details: %s", e)
+=======
+                        # Use get_schedule() directly for more reliable data
+                        schedule = await client.get_schedule(schedule_id)
+                        _LOGGER.debug("Full schedule from API: %s", schedule)
+                        
+                        if isinstance(schedule, dict):
+                            # Extract events from schedule_data structure
+                            times = self._extract_events_from_schedule(schedule)
+                            
+                            _LOGGER.debug("Extracted times from schedule_data: %s", times)
+                            
+                            # Schedule is enabled if it exists and has events
+                            schedule_enabled = len(times) > 0
+                            
+                            self._schedule_data.update({
+                                "enabled": schedule_enabled,
+                                "name": schedule.get("name") or self._schedule_data["name"],
+                                "times": times,
+                            })
+                            _LOGGER.debug("Final schedule data: %s", self._schedule_data)
+                    except (EnviApiError, EnviDeviceError) as e:
+                        _LOGGER.warning("Could not fetch full schedule details for schedule_id %s: %s", schedule_id, e)
+                        # Continue with device state schedule info
+                    except Exception as e:
+                        _LOGGER.error("Unexpected error fetching schedule details: %s", e, exc_info=True)
+                        # Continue with device state schedule info
+            except (EnviApiError, EnviDeviceError) as e:
+                _LOGGER.error("Failed to get schedule: %s", e)
+                errors["base"] = "failed_to_load_schedule"
+                self._schedule_data = {}
+>>>>>>> c02d638 (Fix CodeRabbit review issues: Extract formatting, fix exceptions, coordinator check)
             except Exception as e:
-                _LOGGER.error("Failed to get schedule: %s", e, exc_info=True)
+                _LOGGER.exception("Unexpected error loading schedule")
                 errors["base"] = "failed_to_load_schedule"
                 self._schedule_data = {}
         
@@ -369,15 +442,17 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                     # Refresh device data
                     coordinator_key = f"{DOMAIN}_coordinator_{self.config_entry.entry_id}"
                     coordinator = domain_data.get(coordinator_key)
-                    if coordinator and hasattr(coordinator, "async_refresh_device"):
-                        if self._device_id in coordinator.device_ids:
-                            await coordinator.async_refresh_device(self._device_id)
+                    if (coordinator 
+                        and hasattr(coordinator, "async_refresh_device")
+                        and hasattr(coordinator, "device_ids")
+                        and self._device_id in coordinator.device_ids):
+                        await coordinator.async_refresh_device(self._device_id)
                     
                     return self.async_create_entry(
                         title="",
                         data=self.config_entry.options or {},
                     )
-            except Exception as e:
+            except Exception:
                 _LOGGER.exception("Error saving schedule")
                 errors["base"] = "failed_to_save_schedule"
         
@@ -393,23 +468,8 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
             enabled_value = bool(enabled_value)
         
         # Format time entries as string for text input
-        # Format: "HH:MM:SS,temp,enabled|HH:MM:SS,temp,enabled"
-        time_entries_str = ""
-        if current_times:
-            time_parts = []
-            for entry in current_times:
-                if isinstance(entry, dict):
-                    time_str = entry.get("time", "")
-                    temp = entry.get("temperature", "")
-                    enabled = entry.get("enabled", True)
-                    # Normalize enabled for display
-                    if isinstance(enabled, str):
-                        enabled = enabled.lower() in ("true", "1", "yes", "on")
-                    elif isinstance(enabled, int):
-                        enabled = bool(enabled)
-                    if time_str and temp:
-                        time_parts.append(f"{time_str},{temp},{str(enabled).lower()}")
-            time_entries_str = "|".join(time_parts)
+        time_entries_str = self._format_time_entries_for_display(current_times) if current_times else ""
+        _LOGGER.debug("Formatted time entries: %s (from %s entries)", time_entries_str, len(current_times) if current_times else 0)
         
         _LOGGER.debug("Form defaults: enabled=%s, name=%s, time_entries=%s", 
                      enabled_value, current_schedule.get("name", ""), time_entries_str)
@@ -584,16 +644,7 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
         current_times = current_schedule.get("times", [])
         
         # Format time entries for display
-        time_entries_str = ""
-        if current_times:
-            time_parts = []
-            for entry in current_times:
-                if isinstance(entry, dict):
-                    time_str = entry.get("time", "")
-                    temp = entry.get("temperature", "")
-                    enabled = entry.get("enabled", True)
-                    time_parts.append(f"{time_str},{temp},{enabled}")
-            time_entries_str = "|".join(time_parts)
+        time_entries_str = self._format_time_entries_for_display(current_times) if current_times else ""
         
         # Get device name from entity registry for this config entry
         device_name = "Unknown Device"
