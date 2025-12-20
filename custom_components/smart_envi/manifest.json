@@ -1,0 +1,14 @@
+{
+  "domain": "smart_envi",
+  "name": "Envi Smart Heater",
+  "documentation": "https://github.com/rendershome/smart_envi",
+  "issue_tracker": "https://github.com/rendershome/smart_envi/issues",
+  "requirements": ["aiohttp>=3.8.4"],
+  "dependencies": [],
+  "codeowners": ["@rendershome"],
+  "config_flow": true,
+  "version": "2.0.0",
+  "iot_class": "cloud_poll",
+  "translations": ["en"],
+  "homeassistant": "2023.1.0"
+}

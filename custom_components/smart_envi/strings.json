@@ -1,0 +1,79 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Envi Heater Setup",
+        "description": "Enter your Envi account credentials to connect your Smart Envi heaters.",
+        "data": {
+          "username": "Email Address",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "The email address you use to log in to the Envi app.",
+          "password": "The password you use to log in to the Envi app."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password. Please check your Envi account credentials.",
+      "cannot_connect": "Unable to connect to the Envi API. Please check your internet connection and try again."
+    },
+    "abort": {
+      "already_configured": "This Envi account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Envi Options",
+        "description": "Choose what you want to configure.",
+        "menu_options": {
+          "integration": "Integration Settings (Scan Interval, API Timeout)",
+          "schedule": "Edit Device Schedule"
+        }
+      },
+      "integration_options": {
+        "title": "Integration Settings",
+        "description": "Configure how often the integration checks for device updates and how long to wait for API responses.",
+        "data": {
+          "scan_interval": "Polling Interval (seconds)",
+          "api_timeout": "API Timeout (seconds)"
+        },
+        "data_description": {
+          "scan_interval": "How often to check for device updates.\n\n• Default: 30 seconds (recommended)\n• Range: 10-300 seconds\n• Lower values = more frequent updates but higher API usage\n• Higher values = less API usage but slower response to changes\n• Minimum 10 seconds to avoid API rate limiting",
+          "api_timeout": "Maximum time to wait for API responses.\n\n• Default: 15 seconds (recommended)\n• Range: 5-60 seconds\n• Increase if you have slow internet or frequent timeout errors\n• Decrease if you want faster failure detection"
+        }
+      },
+      "select_device": {
+        "title": "Select Device",
+        "description": "Choose a heater to edit its schedule.",
+        "data": {
+          "entity_id": "Heater"
+        },
+        "data_description": {
+          "entity_id": "Select the Smart Envi heater whose schedule you want to edit."
+        }
+      },
+      "edit_schedule": {
+        "title": "Edit Schedule",
+        "description": "Configure the heating schedule for this device. Set times when the heater should automatically change temperature.",
+        "data": {
+          "enabled": "Enable Schedule",
+          "name": "Schedule Name",
+          "time_entries": "Time Entries"
+        },
+        "data_description": {
+          "enabled": "Turn the schedule on or off. When disabled, the schedule will not run and the heater will maintain its current setting.",
+          "name": "Optional name for this schedule (e.g., 'Weekday Schedule', 'Weekend Schedule').",
+          "time_entries": "Schedule time entries in format: HH:MM:SS,temperature,enabled\n\nSeparate multiple entries with | (pipe character)\nTemperature range: 50-86°F\nEnabled: true or false\n\n📋 EXAMPLES:\n• Single entry: 08:00:00,72,true\n• Two entries: 08:00:00,72,true|18:00:00,68,true\n\n📅 SAMPLE SCHEDULES:\n• Morning/Evening:\n  07:00:00,72,true|22:00:00,68,true\n\n• Work Day (away during day):\n  06:00:00,70,true|08:00:00,62,true|17:00:00,70,true|22:00:00,65,true\n\n• Weekend (sleep in):\n  08:00:00,70,true|23:00:00,68,true\n\n• All Day Comfort:\n  00:00:00,70,true"
+        }
+      }
+    },
+    "error": {
+      "invalid_time_format": "Invalid time format. Use HH:MM:SS (e.g., 08:00:00)",
+      "invalid_temperature": "Temperature must be between 50 and 86°F",
+      "schedule_update_failed": "Failed to update schedule. Please try again."
+    }
+  }
+}
+
