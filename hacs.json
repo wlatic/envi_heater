@@ -1,4 +1,4 @@
 {
-  "name": "Envi Heater",
-  "description": "Envi Heater integration for Home Assistant"
+  "name": "Envi Smart Heater",
+  "homeassistant": "2023.1.0"
 }
