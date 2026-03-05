@@ -13,7 +13,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import entity_registry
 from homeassistant.exceptions import HomeAssistantError
 
-from .api import EnviApiClient, EnviAuthenticationError, EnviApiError, EnviDeviceError, EnviApiError, EnviDeviceError
+from .api import EnviApiClient, EnviAuthenticationError, EnviApiError, EnviDeviceError
 from .const import (
     DOMAIN,
     DEFAULT_SCAN_INTERVAL,
