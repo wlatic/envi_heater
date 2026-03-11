@@ -39,8 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get options with defaults
     options = entry.options or {}
     api_timeout = options.get("api_timeout", 15)
-    
-    client = EnviApiClient(session, entry.data["username"], entry.data["password"], api_timeout=api_timeout)
+
+    # Backward compatibility: older entries stored "username".
+    login = entry.data.get("email") or entry.data.get("username")
+    client = EnviApiClient(session, login, entry.data["password"], api_timeout=api_timeout)
 
     try:
         await client.authenticate()

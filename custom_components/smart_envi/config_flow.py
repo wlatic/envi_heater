@@ -38,19 +38,19 @@ class EnviHeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            username = user_input["username"]
+            email = user_input["email"]
             password = user_input["password"]
 
-            await self.async_set_unique_id(username.lower())
+            await self.async_set_unique_id(email.lower())
             self._abort_if_unique_id_configured()
 
             session = async_get_clientsession(self.hass)
-            client = EnviApiClient(session, username, password)
+            client = EnviApiClient(session, email, password)
 
             try:
                 await client.authenticate()
                 return self.async_create_entry(
-                    title=f"Smart Envi ({username})",
+                    title=f"Smart Envi ({email})",
                     data=user_input,
                 )
             except EnviAuthenticationError:
@@ -63,7 +63,7 @@ class EnviHeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("username"): str,
+                    vol.Required("email"): str,
                     vol.Required("password"): str,
                 }
             ),

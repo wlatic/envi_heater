@@ -5,11 +5,11 @@
         "title": "Envi App Login",
         "description": "Use the same email and password you use in the **Envi mobile app** (the app that controls your heater). This is not your eheat.com store account — the integration talks to Envi's cloud, so you must use your Envi app login.",
         "data": {
-          "username": "Email (Envi app)",
+          "email": "Email (Envi app)",
           "password": "Password (Envi app)"
         },
         "data_description": {
-          "username": "The email you use to log in to the Envi mobile app (not eheat.com).",
+          "email": "The email you use to log in to the Envi mobile app (not eheat.com).",
           "password": "The password you use to log in to the Envi mobile app."
         }
       }
