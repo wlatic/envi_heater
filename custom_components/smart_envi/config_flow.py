@@ -13,7 +13,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import entity_registry
 from homeassistant.exceptions import HomeAssistantError
 
-from .api import EnviApiClient, EnviAuthenticationError, EnviApiError, EnviDeviceError, EnviApiError, EnviDeviceError
+from .api import EnviApiClient, EnviAuthenticationError, EnviApiError, EnviDeviceError
 from .const import (
     DOMAIN,
     DEFAULT_SCAN_INTERVAL,
@@ -38,19 +38,19 @@ class EnviHeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            username = user_input["username"]
+            email = user_input["email"]
             password = user_input["password"]
 
-            await self.async_set_unique_id(username.lower())
+            await self.async_set_unique_id(email.lower())
             self._abort_if_unique_id_configured()
 
             session = async_get_clientsession(self.hass)
-            client = EnviApiClient(session, username, password)
+            client = EnviApiClient(session, email, password)
 
             try:
                 await client.authenticate()
                 return self.async_create_entry(
-                    title=f"Smart Envi ({username})",
+                    title=f"Smart Envi ({email})",
                     data=user_input,
                 )
             except EnviAuthenticationError:
@@ -63,7 +63,7 @@ class EnviHeaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("username"): str,
+                    vol.Required("email"): str,
                     vol.Required("password"): str,
                 }
             ),
@@ -127,8 +127,7 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                         _LOGGER.warning("Skipping invalid time entry: time=%s, temp=%s", time_str, temp)
         
         return "|".join(time_parts)
-    
->>>>>>> c02d638 (Fix CodeRabbit review issues: Extract formatting, fix exceptions, coordinator check)
+
     def _parse_time_entries(self, time_entries_str: str) -> tuple[list[dict], dict[str, str]]:
         """Parse time entries string into structured list.
         
@@ -358,7 +357,6 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                 # Try to get full schedule details if schedule_id exists
                 if schedule_id:
                     try:
-<<<<<<< HEAD
                         schedule_list = await client.get_schedule_list()
                         for schedule in schedule_list:
                             if isinstance(schedule, dict) and schedule.get("id") == schedule_id:
@@ -369,39 +367,20 @@ class EnviHeaterOptionsFlowHandler(config_entries.OptionsFlow):
                                     "times": schedule.get("times", self._schedule_data["times"]),
                                 })
                                 break
-                    except Exception as e:
-                        _LOGGER.debug("Could not fetch full schedule details: %s", e)
-=======
-                        # Use get_schedule() directly for more reliable data
-                        schedule = await client.get_schedule(schedule_id)
-                        _LOGGER.debug("Full schedule from API: %s", schedule)
-                        
-                        if isinstance(schedule, dict):
-                            # Extract events from schedule_data structure
-                            times = self._extract_events_from_schedule(schedule)
-                            
-                            _LOGGER.debug("Extracted times from schedule_data: %s", times)
-                            
-                            # Schedule is enabled if it exists and has events
-                            schedule_enabled = len(times) > 0
-                            
-                            self._schedule_data.update({
-                                "enabled": schedule_enabled,
-                                "name": schedule.get("name") or self._schedule_data["name"],
-                                "times": times,
-                            })
-                            _LOGGER.debug("Final schedule data: %s", self._schedule_data)
                     except (EnviApiError, EnviDeviceError) as e:
-                        _LOGGER.warning("Could not fetch full schedule details for schedule_id %s: %s", schedule_id, e)
+                        _LOGGER.warning(
+                            "Could not fetch full schedule details for schedule_id %s: %s",
+                            schedule_id,
+                            e,
+                        )
                         # Continue with device state schedule info
                     except Exception as e:
-                        _LOGGER.error("Unexpected error fetching schedule details: %s", e, exc_info=True)
+                        _LOGGER.debug("Could not fetch full schedule details: %s", e)
                         # Continue with device state schedule info
             except (EnviApiError, EnviDeviceError) as e:
                 _LOGGER.error("Failed to get schedule: %s", e)
                 errors["base"] = "failed_to_load_schedule"
                 self._schedule_data = {}
->>>>>>> c02d638 (Fix CodeRabbit review issues: Extract formatting, fix exceptions, coordinator check)
             except Exception as e:
                 _LOGGER.exception("Unexpected error loading schedule")
                 errors["base"] = "failed_to_load_schedule"

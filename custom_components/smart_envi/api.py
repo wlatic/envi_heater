@@ -75,37 +75,106 @@ class EnviApiClient:
                 network error, or API rejection)
         """
         fresh_device_id = f"ha_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
-        payload = {
-            "username": self.username,
-            "password": self.password,
-            "login_type": 1,
-            "device_id": fresh_device_id,
-            "device_type": "homeassistant",
-        }
         url = f"{self.base_url}/{ENDPOINTS['auth_login']}"
-        headers = {
+        base_headers = {
             "Accept": "application/json",
-            "Content-Type": "application/json",
             "User-Agent": "HomeAssistant-Envi/1.0",
         }
-        _LOGGER.debug("Envi login attempt - device_id: %s", fresh_device_id)
-        try:
-            async with self.session.post(url, json=payload, headers=headers, timeout=self.timeout) as resp:
+
+        async def _attempt_login(*, payload: dict, send_as_json: bool) -> str:
+            headers = dict(base_headers)
+            if send_as_json:
+                headers["Content-Type"] = "application/json"
+                async with self.session.post(url, json=payload, headers=headers, timeout=self.timeout) as resp:
+                    resp_text = await resp.text()
+                    return resp.status, resp_text
+
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+            async with self.session.post(url, data=payload, headers=headers, timeout=self.timeout) as resp:
                 resp_text = await resp.text()
-                _LOGGER.debug("Envi login HTTP %s - %.1000s", resp.status, resp_text)
-                if resp.status != 200:
-                    raise EnviAuthenticationError(f"Login failed (HTTP {resp.status})")
-                data = json.loads(resp_text)
-                if data.get("status") != "success":
-                    msg = data.get("msg", "unknown error")
-                    raise EnviAuthenticationError(f"Envi rejected login: {msg}")
-                self.token = data["data"]["token"]
-                jwt_exp = self._parse_jwt_expiry(self.token)
-                self.token_expires = jwt_exp or (datetime.now(timezone.utc) + timedelta(hours=24))
-                _LOGGER.info(
-                    "Envi login successful - token valid until %s",
-                    self.token_expires.strftime("%Y-%m-%d %H:%M"),
-                )
+                return resp.status, resp_text
+
+        # The Envi backend has been observed to be picky about payload shape.
+        # Try a small set of common variants to avoid HTTP 400 "bad request".
+        payload_variants: list[dict] = [
+            {
+                "username": self.username,
+                "password": self.password,
+                "login_type": 1,
+                "device_id": fresh_device_id,
+                "device_type": "homeassistant",
+            },
+            {
+                "email": self.username,
+                "password": self.password,
+                "login_type": 1,
+                "device_id": fresh_device_id,
+                "device_type": "homeassistant",
+            },
+            {
+                "username": self.username,
+                "password": self.password,
+            },
+            {
+                "email": self.username,
+                "password": self.password,
+            },
+        ]
+
+        _LOGGER.debug("Envi login attempt - device_id: %s", fresh_device_id)
+        last_status: int | None = None
+        last_body: str | None = None
+
+        try:
+            for payload in payload_variants:
+                for send_as_json in (True, False):
+                    status, body = await _attempt_login(payload=payload, send_as_json=send_as_json)
+                    last_status, last_body = status, body
+                    _LOGGER.debug(
+                        "Envi login HTTP %s (json=%s payload_keys=%s) - %.1000s",
+                        status,
+                        send_as_json,
+                        sorted(payload.keys()),
+                        body,
+                    )
+
+                    if status != 200:
+                        continue
+
+                    try:
+                        data = json.loads(body)
+                    except json.JSONDecodeError as err:
+                        raise EnviAuthenticationError("Login response was not valid JSON") from err
+
+                    # Accept a couple of common shapes.
+                    token = None
+                    if isinstance(data, dict):
+                        if isinstance(data.get("data"), dict):
+                            token = data["data"].get("token") or data["data"].get("access_token")
+                        token = token or data.get("token") or data.get("access_token")
+
+                        # Some backends include an explicit status/msg; if present and not success, treat as auth failure.
+                        status_field = data.get("status")
+                        if status_field is not None and status_field != "success" and token is None:
+                            msg = data.get("msg") or data.get("message") or "unknown error"
+                            raise EnviAuthenticationError(f"Envi rejected login: {msg}")
+
+                    if not token:
+                        raise EnviAuthenticationError("Login succeeded but no token was returned")
+
+                    self.token = token
+                    jwt_exp = self._parse_jwt_expiry(self.token)
+                    self.token_expires = jwt_exp or (datetime.now(timezone.utc) + timedelta(hours=24))
+                    _LOGGER.info(
+                        "Envi login successful - token valid until %s",
+                        self.token_expires.strftime("%Y-%m-%d %H:%M"),
+                    )
+                    return
+
+            snippet = (last_body or "").strip().replace("\n", " ")[:300]
+            raise EnviAuthenticationError(f"Login failed (HTTP {last_status}): {snippet}")
+        except EnviAuthenticationError:
+            raise
         except Exception as err:
             _LOGGER.error("Envi authentication failed", exc_info=True)
             raise EnviAuthenticationError("Authentication failed") from err
